@@ -6,7 +6,6 @@ import org.reactivestreams.Publisher;
 import party.iroiro.r2jdbc.util.QueueDispatcher;
 import reactor.core.publisher.Mono;
 
-import java.sql.SQLException;
 import java.time.Duration;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingDeque;
@@ -52,10 +51,8 @@ public class JdbcConnection implements Connection {
     Mono<Void> voidSendValid(JdbcJob.Job job, Object data) {
         return Mono.create(voidMonoSink -> voidMonoSink.onRequest(
                 ignored -> {
-                    log.trace("Sending: {}", job);
                     if (!jobs.offer(new JdbcJob(job, data, (i, e) -> {
                         if (e == null) {
-                            log.trace("Upstream produced: {}", job);
                             voidMonoSink.success();
                         } else {
                             voidMonoSink.error(e);
@@ -63,7 +60,6 @@ public class JdbcConnection implements Connection {
                     }))) {
                         voidMonoSink.error(new IndexOutOfBoundsException("Unable to push to queue"));
                     }
-                    log.trace("Queue size now: {}", jobs.size());
                 }));
     }
 
@@ -73,10 +69,8 @@ public class JdbcConnection implements Connection {
         }
         return Mono.create(sink -> sink.onRequest(
                 ignored -> {
-                    log.trace("Sending: {}", job);
                     if (!jobs.offer(new JdbcJob(job, data, (i, e) -> {
                         if (e == null) {
-                            log.trace("Upstream produced: {}", job);
                             sink.success(converter.apply(i));
                         } else {
                             sink.error(e);
@@ -84,7 +78,6 @@ public class JdbcConnection implements Connection {
                     }))) {
                         sink.error(new IndexOutOfBoundsException("Unable to push to queue"));
                     }
-                    log.trace("Queue size now: {}", jobs.size());
                 }));
     }
 

@@ -5,6 +5,7 @@ import io.r2dbc.spi.ConnectionFactoryOptions;
 import io.r2dbc.spi.IsolationLevel;
 import lbmq.LinkedBlockingMultiQueue;
 import lombok.extern.slf4j.Slf4j;
+import party.iroiro.r2jdbc.util.Pair;
 import party.iroiro.r2jdbc.util.QueueItem;
 
 import java.math.BigDecimal;
@@ -22,7 +23,7 @@ public class JdbcWorker implements Runnable {
     private final ConnectionFactoryOptions options;
     private Connection conn;
 
-    private final HashMap<String, PreparedStatement> statementCache;
+    private final HashMap<Integer, PreparedStatement> statementCache;
     private static final ConcurrentHashMap<Integer, Class<?>> columnTypeGuesses;
 
     private static void put(Class<?> clazz, int... types) {
@@ -193,7 +194,7 @@ public class JdbcWorker implements Runnable {
             case EXECUTE_STATEMENT:
                 JdbcStatement statement = (JdbcStatement) job.data;
                 try {
-                    Object result = execute(statement.sql, statement.bindings);
+                    Object result = execute(statement.sql, statement.bindings, statement.wantsGenerated.get());
                     offer(new JdbcPacket(result), job.consumer);
                 } catch (SQLException e) {
                     offer(e, job.consumer);
@@ -204,7 +205,7 @@ public class JdbcWorker implements Runnable {
                 List<Object> results = new ArrayList<>(batch.sql.size());
                 for (String s : batch.sql) {
                     try {
-                        Object result = execute(s, null);
+                        Object result = execute(s, null, null);
                         results.add(result);
                     } catch (SQLException e) {
                         results.add(e);
@@ -281,8 +282,8 @@ public class JdbcWorker implements Runnable {
         log.trace("Process finished: {}", job.job);
     }
 
-    private Object execute(String sql, ArrayList<Map<Integer, Object>> bindings) throws SQLException {
-        PreparedStatement s = getCachedOrPrepare(sql);
+    private Object execute(String sql, ArrayList<Map<Integer, Object>> bindings, String[] keys) throws SQLException {
+        PreparedStatement s = getCachedOrPrepare(sql, keys);
         s.clearParameters();
         s.clearBatch();
         if (bindings == null || bindings.size() == 1) {
@@ -293,7 +294,8 @@ public class JdbcWorker implements Runnable {
             if (isQuery) {
                 return s.getResultSet();
             } else {
-                return new int[]{s.getUpdateCount()};
+                int[] counts = new int[]{s.getUpdateCount()};
+                return new Pair(counts, s.getGeneratedKeys());
             }
         } else if (bindings.size() == 0) {
             throw new IllegalArgumentException("No valid statement");
@@ -306,12 +308,22 @@ public class JdbcWorker implements Runnable {
         }
     }
 
-    private PreparedStatement getCachedOrPrepare(String sql) throws SQLException {
-        if (statementCache.containsKey(sql)) {
-            return statementCache.get(sql);
+    private int keyedSqlHash(String sql, String[] keys) {
+        return Objects.hash(sql, Arrays.hashCode(keys));
+    }
+
+    private PreparedStatement getCachedOrPrepare(String sql, String[] keys) throws SQLException {
+        int hash = keyedSqlHash(sql, keys);
+        if (statementCache.containsKey(hash)) {
+            return statementCache.get(hash);
         } else {
-            PreparedStatement statement = conn.prepareStatement(sql);
-            statementCache.put(sql, statement);
+            PreparedStatement statement;
+            if (keys == null) {
+                statement = conn.prepareStatement(sql);
+            } else {
+                statement = conn.prepareStatement(sql, keys);
+            }
+            statementCache.put(hash, statement);
             return statement;
         }
     }

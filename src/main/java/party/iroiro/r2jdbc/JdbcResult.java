@@ -7,40 +7,48 @@ import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.reactivestreams.Publisher;
+import party.iroiro.r2jdbc.util.Pair;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
+import java.lang.ref.Cleaner;
 import java.sql.ResultSet;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.function.Predicate;
 
 @Slf4j
 public class JdbcResult implements Result {
+    private static final Cleaner cleaner = Cleaner.create();
+
     private final int[] updated;
     /**
      * Be sure NEVER access it outside the worker thread
      */
-    private final ResultSet result;
+    private final AtomicReference<ResultSet> result;
     private final JdbcConnection conn;
+    private final int fetchSize;
     private final ArrayList<Predicate<Segment>> filters;
     private final Exception e;
 
-    public JdbcResult(JdbcConnection conn, Object data) {
+    public JdbcResult(JdbcConnection conn, Object data, int fetchSize) {
+        int[] finalUpdates;
         this.conn = conn;
+        this.fetchSize = fetchSize;
         if (data instanceof int[]) {
-            this.updated = (int[]) data;
+            finalUpdates = (int[]) data;
         } else {
-            this.updated = null;
+            finalUpdates = null;
         }
 
         if (data instanceof ResultSet) {
-            this.result = (ResultSet) data;
+            this.result = new AtomicReference<>((ResultSet) data);
         } else {
-            this.result = null;
+            this.result = new AtomicReference<>(null);
         }
 
         if (data instanceof Exception) {
@@ -48,7 +56,19 @@ public class JdbcResult implements Result {
         } else {
             e = null;
         }
+
+        if (data instanceof Pair) {
+            finalUpdates = (int[]) ((Pair) data).getFirst();
+            this.result.set((ResultSet) ((Pair) data).getSecond());
+        }
+
+        this.updated = finalUpdates;
         filters = new ArrayList<>();
+        cleaner.register(this, new ResultSetCleaner(result, conn));
+    }
+
+    public JdbcResult(JdbcConnection conn, Object data) {
+        this(conn, data, -1);
     }
 
     @Override
@@ -61,13 +81,14 @@ public class JdbcResult implements Result {
     }
 
     private Mono<JdbcRowMetadata> fetchMetadata() {
-        return conn.send(JdbcJob.Job.RESULT_METADATA, result, packet -> (JdbcRowMetadata) packet.data);
+        return conn.send(JdbcJob.Job.RESULT_METADATA, result.get(), packet -> (JdbcRowMetadata) packet.data);
     }
 
     private Flux<JdbcRow> fetchRows(JdbcRowMetadata metadata) {
         return Flux.create(sink -> {
             sink.onRequest(number -> conn.send(JdbcJob.Job.RESULT_ROWS,
-                    new JdbcResultRequest(result, (int) number, metadata),
+                    new JdbcResultRequest(result.get(),
+                            fetchSize > 0 ? fetchSize : (int) number, metadata),
                     packet -> (List<?>) packet.data)
                     .doOnNext(list -> {
                         for (Object item : list) {
@@ -82,7 +103,10 @@ public class JdbcResult implements Result {
                         }
                     }).doOnError(sink::error)
                     .subscribe());
-            sink.onDispose(() -> conn.voidSend(JdbcJob.Job.CLOSE_RESULT, result).subscribe());
+            sink.onDispose(() -> {
+                ResultSet set = result.getAndSet(null);
+                conn.voidSend(JdbcJob.Job.CLOSE_RESULT, set).subscribe();
+            });
         });
     }
 
@@ -140,5 +164,23 @@ public class JdbcResult implements Result {
         final ResultSet result;
         final int count;
         final JdbcRowMetadata columns;
+    }
+
+    private static class ResultSetCleaner implements Runnable {
+        private final AtomicReference<ResultSet> result;
+        private final JdbcConnection conn;
+
+        public ResultSetCleaner(AtomicReference<ResultSet> result, JdbcConnection conn) {
+            this.result = result;
+            this.conn = conn;
+        }
+
+        @Override
+        public void run() {
+            ResultSet set = result.getAndSet(null);
+            if (set != null) {
+                conn.voidSend(JdbcJob.Job.CLOSE_RESULT, set).subscribe();
+            }
+        }
     }
 }

@@ -9,6 +9,8 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.NoSuchElementException;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -26,16 +28,32 @@ public class JdbcStatement implements Statement {
     private static final Pattern NAMED_PARAMETER = Pattern.compile("(?:\\s|^):(\\w+)(?:\\s|$)");
     private final JdbcConnection conn;
     private final Map<String, Integer> indices;
-    String sql;
+    private final AtomicInteger size;
+    final AtomicReference<String[]> wantsGenerated;
+    final String sql;
 
     final ArrayList<Map<Integer, Object>> bindings;
 
     public JdbcStatement(String sql, JdbcConnection conn) {
-        this.sql = sql;
         this.conn = conn;
         bindings = new ArrayList<>();
         add();
         indices = new HashMap<>();
+        size = new AtomicInteger(-1);
+        wantsGenerated = new AtomicReference<>(null);
+        this.sql = simpleParse(sql);
+    }
+
+    private String simpleParse(String sql) {
+        log.debug("Named Sql: {}", sql);
+        Matcher matcher = NAMED_PARAMETER.matcher(sql);
+        int index = 0;
+        while (matcher.find()) {
+            indices.put(matcher.group(1), index);
+            index++;
+        }
+        log.debug("Index map: {}", indices);
+        return matcher.replaceAll(" ? ");
     }
 
     @Override
@@ -45,18 +63,6 @@ public class JdbcStatement implements Statement {
     }
 
     private int getIndexOfNamedParameter(String name) {
-        if (indices.size() == 0) {
-            log.debug("Named Sql: {}", sql);
-            Matcher matcher = NAMED_PARAMETER.matcher(sql);
-            int index = 0;
-            while (matcher.find()) {
-                indices.put(matcher.group(1), index);
-                index++;
-            }
-            sql = matcher.replaceAll(" ? ");
-            log.debug("Replaced Sql: {}", sql);
-            log.debug("Index map: {}", indices);
-        }
         Integer integer = indices.get(name);
         if (integer == null) {
             throw new NoSuchElementException(name);
@@ -89,18 +95,18 @@ public class JdbcStatement implements Statement {
     @Override
     public Publisher<? extends Result> execute() {
         return conn.send(JdbcJob.Job.EXECUTE_STATEMENT, this,
-                packet -> new JdbcResult(conn, packet.data)).log();
+                packet -> new JdbcResult(conn, packet.data, size.get())).log();
     }
 
     @Override
     public Statement returnGeneratedValues(String... columns) {
-        // TODO
-        return Statement.super.returnGeneratedValues(columns);
+        wantsGenerated.set(columns);
+        return this;
     }
 
     @Override
     public Statement fetchSize(int rows) {
-        // TODO
-        return Statement.super.fetchSize(rows);
+        size.set(rows);
+        return this;
     }
 }
