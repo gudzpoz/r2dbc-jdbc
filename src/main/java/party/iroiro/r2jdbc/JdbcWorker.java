@@ -17,7 +17,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BiConsumer;
 
 @Slf4j
-public class JdbcWorker implements Runnable {
+class JdbcWorker implements Runnable {
     private static final ConcurrentHashMap<Integer, Class<?>> columnTypeGuesses;
 
     static {
@@ -47,7 +47,7 @@ public class JdbcWorker implements Runnable {
     private final ConnectionFactoryOptions options;
     private Connection conn;
 
-    public JdbcWorker(BlockingQueue<JdbcJob> jobs,
+    JdbcWorker(BlockingQueue<JdbcJob> jobs,
                       LinkedBlockingMultiQueue<Integer, QueueItem<JdbcPacket>>.SubQueue out,
                       ConnectionFactoryOptions options) {
         this.jobs = jobs;

@@ -11,7 +11,7 @@ public class JdbcRow implements Row, Result.RowSegment {
     private final ArrayList<Object> rowData;
     private JdbcRowMetadata metadata;
 
-    public JdbcRow(ArrayList<Object> rowData) {
+    JdbcRow(ArrayList<Object> rowData) {
         this.rowData = rowData;
     }
 

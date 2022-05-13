@@ -11,7 +11,7 @@ import java.util.NoSuchElementException;
 public class JdbcRowMetadata implements RowMetadata {
     private final ArrayList<JdbcColumnMetadata> columns;
 
-    public JdbcRowMetadata(ArrayList<JdbcColumnMetadata> columns) {
+    JdbcRowMetadata(ArrayList<JdbcColumnMetadata> columns) {
         this.columns = columns;
     }
 

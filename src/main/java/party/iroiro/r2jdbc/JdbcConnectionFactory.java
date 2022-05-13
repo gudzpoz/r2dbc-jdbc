@@ -5,7 +5,6 @@ import io.r2dbc.spi.ConnectionFactory;
 import io.r2dbc.spi.ConnectionFactoryMetadata;
 import io.r2dbc.spi.ConnectionFactoryOptions;
 import lbmq.LinkedBlockingMultiQueue;
-import org.reactivestreams.Publisher;
 import party.iroiro.r2jdbc.util.QueueDispatcher;
 import reactor.core.publisher.Mono;
 
@@ -14,7 +13,7 @@ public class JdbcConnectionFactory implements ConnectionFactory {
     private final QueueDispatcher<JdbcPacket> adapter;
     private final Thread dispatcher;
 
-    public JdbcConnectionFactory(ConnectionFactoryOptions options) {
+    JdbcConnectionFactory(ConnectionFactoryOptions options) {
         this.options = options;
         this.adapter = new QueueDispatcher<>(new LinkedBlockingMultiQueue<>());
         this.dispatcher = new Thread(this.adapter);
@@ -30,7 +29,7 @@ public class JdbcConnectionFactory implements ConnectionFactory {
     }
 
     @Override
-    public Publisher<? extends Connection> create() {
+    public Mono<JdbcConnection> create() {
         try {
             JdbcConnection connection = new JdbcConnection(adapter, options);
             return initDispatcher().then(connection.init());

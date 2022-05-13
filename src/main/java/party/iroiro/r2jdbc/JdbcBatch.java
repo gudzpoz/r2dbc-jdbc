@@ -1,8 +1,6 @@
 package party.iroiro.r2jdbc;
 
 import io.r2dbc.spi.Batch;
-import io.r2dbc.spi.Result;
-import org.reactivestreams.Publisher;
 import reactor.core.publisher.Flux;
 
 import java.util.ArrayList;
@@ -13,19 +11,26 @@ public class JdbcBatch implements Batch {
 
     final ArrayList<String> sql;
 
-    public JdbcBatch(JdbcConnection conn) {
+    JdbcBatch(JdbcConnection conn) {
+        if (conn == null) {
+            throw new IllegalArgumentException("connection must not be null");
+        }
         this.conn = conn;
         sql = new ArrayList<>();
     }
 
     @Override
-    public Batch add(String sql) {
+    public JdbcBatch add(String sql) {
+        //noinspection ConstantConditions
+        if (sql == null) {
+            throw new IllegalArgumentException("sql must not be null");
+        }
         this.sql.add(sql);
         return this;
     }
 
     @Override
-    public Publisher<? extends Result> execute() {
+    public Flux<JdbcResult> execute() {
         return conn.send(JdbcJob.Job.BATCH, this, packet -> {
             assert packet.data instanceof List;
             return (List<?>) packet.data;

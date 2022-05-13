@@ -32,7 +32,7 @@ public class JdbcStatement implements Statement {
 
     final ArrayList<Map<Integer, Object>> bindings;
 
-    public JdbcStatement(String sql, JdbcConnection conn) {
+    JdbcStatement(String sql, JdbcConnection conn) {
         this.conn = conn;
         bindings = new ArrayList<>();
         add();
@@ -59,6 +59,9 @@ public class JdbcStatement implements Statement {
     }
 
     private int getIndexOfNamedParameter(String name) {
+        if (name == null) {
+            throw new IllegalArgumentException("index must not be null");
+        }
         Integer integer = indices.get(name);
         if (integer == null) {
             throw new NoSuchElementException(name);
@@ -68,6 +71,10 @@ public class JdbcStatement implements Statement {
 
     @Override
     public Statement bind(int index, Object value) {
+        //noinspection ConstantConditions
+        if (value == null) {
+            throw new IllegalArgumentException("value must not be null");
+        }
         bindings.get(bindings.size() - 1).put(index, value);
         return this;
     }

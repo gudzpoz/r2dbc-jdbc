@@ -8,6 +8,9 @@ import party.iroiro.r2jdbc.util.StringEscape;
 import java.util.Properties;
 
 public class JdbcConnectionFactoryProvider implements ConnectionFactoryProvider {
+    public static final Option<String> FORWARD = Option.valueOf("j2forward");
+    public static final Option<String> URL = Option.valueOf("j2url");
+
     /**
      * Converts {@link ConnectionFactoryOptions} to Jdbc urls
      *
@@ -69,7 +72,7 @@ public class JdbcConnectionFactoryProvider implements ConnectionFactoryProvider 
 
         String user = (String) options.getValue(ConnectionFactoryOptions.USER);
         String password = (String) options.getValue(ConnectionFactoryOptions.PASSWORD);
-        String forwardString = (String) options.getValue(Option.valueOf("j2forward"));
+        String forwardString = (String) options.getValue(FORWARD);
         String[] forwarded = forwardString == null ? new String[0] : forwardString.split(",");
         Properties properties = new Properties();
         if (user != null) {
@@ -82,7 +85,7 @@ public class JdbcConnectionFactoryProvider implements ConnectionFactoryProvider 
             properties.put(option, options.getValue(Option.valueOf(option)));
         }
 
-        String forced = (String) options.getValue(Option.valueOf("j2path"));
+        String forced = (String) options.getValue(URL);
         if (forced != null) {
             return new JdbcConnectionDetails(properties, forced);
         }
@@ -135,14 +138,11 @@ public class JdbcConnectionFactoryProvider implements ConnectionFactoryProvider 
     @Override
     public boolean supports(ConnectionFactoryOptions connectionFactoryOptions) {
         try {
-            if (!connectionFactoryOptions.getRequiredValue(ConnectionFactoryOptions.DRIVER)
-                    .equals(getDriver())) {
-                return false;
-            }
-        } catch (NoSuchOptionException e) {
+            getJdbcConnectionUrl(connectionFactoryOptions);
+            return true;
+        } catch (Exception e) {
             return false;
         }
-        return true;
     }
 
     @Override

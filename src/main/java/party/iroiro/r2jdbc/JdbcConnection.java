@@ -22,7 +22,7 @@ public class JdbcConnection implements Connection {
     private final QueueDispatcher<JdbcPacket> adapter;
     private final ConnectionFactoryOptions options;
 
-    public JdbcConnection(QueueDispatcher<JdbcPacket> adapter, ConnectionFactoryOptions options) {
+    JdbcConnection(QueueDispatcher<JdbcPacket> adapter, ConnectionFactoryOptions options) {
         this.adapter = adapter;
         this.options = options;
         this.jobs = new LinkedBlockingDeque<>();
@@ -33,7 +33,7 @@ public class JdbcConnection implements Connection {
         metadata = new AtomicReference<>();
     }
 
-    Mono<Connection> init() {
+    Mono<JdbcConnection> init() {
         new Thread(new JdbcWorker(jobs, adapter.subQueue(), options)).start();
         return send(JdbcJob.Job.INIT, null, packet -> (JdbcConnectionMetadata) packet.data)
                 .doOnNext(metadata::set).thenReturn(this);
@@ -54,7 +54,7 @@ public class JdbcConnection implements Connection {
                         if (e == null) {
                             voidMonoSink.success();
                         } else {
-                            voidMonoSink.error(e);
+                            voidMonoSink.error(new JdbcException(e));
                         }
                     })) {
                         voidMonoSink.error(new IndexOutOfBoundsException("Unable to push to queue"));
@@ -76,7 +76,7 @@ public class JdbcConnection implements Connection {
                         if (e == null) {
                             sink.success(converter.apply(i));
                         } else {
-                            sink.error(e);
+                            sink.error(new JdbcException(e));
                         }
                     })) {
                         sink.error(new IndexOutOfBoundsException("Unable to push to queue"));
@@ -96,7 +96,7 @@ public class JdbcConnection implements Connection {
     }
 
     @Override
-    public Publisher<Void> close() {
+    public Mono<Void> close() {
         if (valid.compareAndSet(true, false)) {
             valid.set(false);
             return voidSendValid(JdbcJob.Job.CLOSE, null);

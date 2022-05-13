@@ -35,7 +35,7 @@ public class JdbcResult implements Result {
     private final ArrayList<Predicate<Segment>> filters;
     private final Exception e;
 
-    public JdbcResult(JdbcConnection conn, Object data, int fetchSize) {
+    JdbcResult(JdbcConnection conn, Object data, int fetchSize) {
         int[] finalUpdates;
         this.conn = conn;
         this.fetchSize = fetchSize;
