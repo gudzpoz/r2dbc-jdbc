@@ -12,6 +12,11 @@ public class JdbcConnectionFactoryProvider implements ConnectionFactoryProvider 
      * Converts {@link ConnectionFactoryOptions} to Jdbc urls
      *
      * <p>
+     * In most cases just add enough slashes to {@link ConnectionFactories#get}
+     * and you will be fine, that is, since R2DBC transforms the HOST part a lot,
+     * we recommend putting everything into the PATH part.
+     * </p>
+     * <p>
      * Note that we use <code>~</code> to escape (I mean it) characters in HOST and PATH:
      * <pre><code>
      * ~~ --> ~
@@ -36,7 +41,8 @@ public class JdbcConnectionFactoryProvider implements ConnectionFactoryProvider 
      *         </code></pre>
      * </p>
      * <p>
-     * Some more examples:
+     * Some more examples (copied from tests, the R2DBC url keys corresponds to
+     * the JDBC values):
      * <pre><code>
      *   map.put("r2dbc:r2jdbc:h2~tcp://~.~.localhost:8080//tmp/test",
      *           "jdbc:h2:tcp://localhost:8080//tmp/test");

@@ -18,19 +18,7 @@ import java.util.function.BiConsumer;
 
 @Slf4j
 public class JdbcWorker implements Runnable {
-    private final BlockingQueue<JdbcJob> jobs;
-    private final LinkedBlockingMultiQueue<Integer, QueueItem<JdbcPacket>>.SubQueue out;
-    private final ConnectionFactoryOptions options;
-    private Connection conn;
-
-    private final HashMap<Integer, PreparedStatement> statementCache;
     private static final ConcurrentHashMap<Integer, Class<?>> columnTypeGuesses;
-
-    private static void put(Class<?> clazz, int... types) {
-        for (int type : types) {
-            columnTypeGuesses.put(type, clazz);
-        }
-    }
 
     static {
         columnTypeGuesses = new ConcurrentHashMap<>();
@@ -54,6 +42,11 @@ public class JdbcWorker implements Runnable {
         // TODO: Clob, Blob?
     }
 
+    private final BlockingQueue<JdbcJob> jobs;
+    private final LinkedBlockingMultiQueue<Integer, QueueItem<JdbcPacket>>.SubQueue out;
+    private final ConnectionFactoryOptions options;
+    private Connection conn;
+
     public JdbcWorker(BlockingQueue<JdbcJob> jobs,
                       LinkedBlockingMultiQueue<Integer, QueueItem<JdbcPacket>>.SubQueue out,
                       ConnectionFactoryOptions options) {
@@ -61,27 +54,18 @@ public class JdbcWorker implements Runnable {
         this.out = out;
         this.options = options;
         this.conn = null;
+    }
 
-        statementCache = new HashMap<>();
+    private static void put(Class<?> clazz, int... types) {
+        for (int type : types) {
+            columnTypeGuesses.put(type, clazz);
+        }
     }
 
     private static Connection getConnection(ConnectionFactoryOptions options) throws SQLException {
-        String path = options.getRequiredValue(ConnectionFactoryOptions.DATABASE).toString();
-        String url;
-        if (path.charAt(0) == '.') {
-            url = "jdbc:h2:" + path;
-        } else {
-            url = "jdbc:h2:/" + path;
-        }
-        log.trace("Jdbc Url: {}", url);
-        Properties properties = new Properties();
-        if (options.hasOption(ConnectionFactoryOptions.USER)) {
-            properties.put("user", options.getValue(ConnectionFactoryOptions.USER));
-        }
-        if (options.hasOption(ConnectionFactoryOptions.PASSWORD)) {
-            properties.put("password", options.getValue(ConnectionFactoryOptions.PASSWORD));
-        }
-        return DriverManager.getConnection(url, properties);
+        JdbcConnectionFactoryProvider.JdbcConnectionDetails details =
+                JdbcConnectionFactoryProvider.getJdbcConnectionUrl(options);
+        return DriverManager.getConnection(details.getUrl(), details.getProperties());
     }
 
     private void offer(JdbcPacket packet, BiConsumer<JdbcPacket, Exception> consumer) {
@@ -284,48 +268,43 @@ public class JdbcWorker implements Runnable {
 
     private Object execute(String sql, ArrayList<Map<Integer, Object>> bindings, String[] keys) throws SQLException {
         PreparedStatement s = getCachedOrPrepare(sql, keys);
-        s.clearParameters();
-        s.clearBatch();
         if (bindings == null || bindings.size() == 1) {
             if (bindings != null) {
                 bindStatement(s, bindings.get(0));
             }
             boolean isQuery = s.execute();
             if (isQuery) {
-                return s.getResultSet();
+                ResultSet resultSet = s.getResultSet();
+                s.closeOnCompletion();
+                return resultSet;
             } else {
                 int[] counts = new int[]{s.getUpdateCount()};
-                return new Pair(counts, s.getGeneratedKeys());
+                Pair pair = new Pair(counts, s.getGeneratedKeys());
+                s.closeOnCompletion();
+                return pair;
             }
         } else if (bindings.size() == 0) {
+            s.close();
             throw new IllegalArgumentException("No valid statement");
         } else {
             for (var map : bindings) {
                 bindStatement(s, map);
                 s.addBatch();
             }
-            return s.executeBatch();
+            int[] ints = s.executeBatch();
+            s.close();
+            return ints;
         }
-    }
-
-    private int keyedSqlHash(String sql, String[] keys) {
-        return Objects.hash(sql, Arrays.hashCode(keys));
     }
 
     private PreparedStatement getCachedOrPrepare(String sql, String[] keys) throws SQLException {
-        int hash = keyedSqlHash(sql, keys);
-        if (statementCache.containsKey(hash)) {
-            return statementCache.get(hash);
+        PreparedStatement statement;
+        if (keys == null) {
+            statement = conn.prepareStatement(sql);
         } else {
-            PreparedStatement statement;
-            if (keys == null) {
-                statement = conn.prepareStatement(sql);
-            } else {
-                statement = conn.prepareStatement(sql, keys);
-            }
-            statementCache.put(hash, statement);
-            return statement;
+            statement = conn.prepareStatement(sql, keys);
         }
+        return statement;
     }
 
     private void bindStatement(PreparedStatement s, Map<Integer, Object> map) throws SQLException {
@@ -336,8 +315,8 @@ public class JdbcWorker implements Runnable {
 
     @Override
     public void run() {
-        log.trace("Listening");
         Thread.currentThread().setName("R2jdbcWorker");
+        log.trace("Listening");
         try {
             while (!Thread.interrupted()) {
                 takeAndProcess();

@@ -3,11 +3,9 @@ package party.iroiro.r2jdbc;
 import io.r2dbc.spi.Result;
 import io.r2dbc.spi.Row;
 import lombok.Data;
-import lombok.extern.slf4j.Slf4j;
 
 import java.util.ArrayList;
 
-@Slf4j
 @Data
 public class JdbcRow implements Row, Result.RowSegment {
     private final ArrayList<Object> rowData;

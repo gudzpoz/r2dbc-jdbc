@@ -50,15 +50,15 @@ public class QueueDispatcher<T> implements Runnable {
 
     @Override
     public void run() {
-        log.trace("Listening");
+        log.debug("Listening");
         Thread.currentThread().setName("R2jdbcDispatcher");
         while (!Thread.interrupted()) {
             takeAndProcess();
         }
-        log.trace("Cleaning up");
+        log.debug("Cleaning up");
         while (queue.peek() != null) {
             takeAndProcess();
         }
-        log.trace("Exiting");
+        log.debug("Exiting");
     }
 }

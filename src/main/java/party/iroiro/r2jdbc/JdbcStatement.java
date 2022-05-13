@@ -2,7 +2,6 @@ package party.iroiro.r2jdbc;
 
 import io.r2dbc.spi.Result;
 import io.r2dbc.spi.Statement;
-import lombok.extern.slf4j.Slf4j;
 import org.reactivestreams.Publisher;
 
 import java.util.ArrayList;
@@ -23,7 +22,6 @@ import java.util.regex.Pattern;
  *     in most <i>simple</i> cases.
  * </p>
  */
-@Slf4j
 public class JdbcStatement implements Statement {
     private static final Pattern NAMED_PARAMETER = Pattern.compile("(?:\\s|^):(\\w+)(?:\\s|$)");
     private final JdbcConnection conn;
@@ -45,14 +43,12 @@ public class JdbcStatement implements Statement {
     }
 
     private String simpleParse(String sql) {
-        log.debug("Named Sql: {}", sql);
         Matcher matcher = NAMED_PARAMETER.matcher(sql);
         int index = 0;
         while (matcher.find()) {
             indices.put(matcher.group(1), index);
             index++;
         }
-        log.debug("Index map: {}", indices);
         return matcher.replaceAll(" ? ");
     }
 
@@ -95,7 +91,7 @@ public class JdbcStatement implements Statement {
     @Override
     public Publisher<? extends Result> execute() {
         return conn.send(JdbcJob.Job.EXECUTE_STATEMENT, this,
-                packet -> new JdbcResult(conn, packet.data, size.get())).log();
+                packet -> new JdbcResult(conn, packet.data, size.get()));
     }
 
     @Override

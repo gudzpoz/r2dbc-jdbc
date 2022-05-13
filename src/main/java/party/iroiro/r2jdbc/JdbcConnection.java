@@ -1,7 +1,6 @@
 package party.iroiro.r2jdbc;
 
 import io.r2dbc.spi.*;
-import lombok.extern.slf4j.Slf4j;
 import org.reactivestreams.Publisher;
 import party.iroiro.r2jdbc.util.QueueDispatcher;
 import reactor.core.publisher.Mono;
@@ -13,7 +12,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 
-@Slf4j
 public class JdbcConnection implements Connection {
     private final BlockingQueue<JdbcJob> jobs;
     private final AtomicReference<ConnectionMetadata> metadata;
@@ -98,7 +96,6 @@ public class JdbcConnection implements Connection {
             valid.set(false);
             return voidSendValid(JdbcJob.Job.CLOSE, null);
         } else {
-            log.error("What");
             return Mono.empty();
         }
     }

@@ -77,9 +77,8 @@ public class JdbcProviderTest {
                             .flatMap(result -> Flux.from(result.getRowsUpdated()).log())
                             .log(),
                     Mono.from(insert.execute())
-                            .flatMapMany(result -> result.map(((row, rowMetadata) -> {
-                                return row.get("id", Long.class);
-                            })))
+                            .flatMapMany(result -> result.map(
+                                    (row, rowMetadata) -> row.get("id", Long.class)))
                             .flatMap(id -> {
                                 query.bind("id", id);
                                 log.trace("Generated Id: {}", id);

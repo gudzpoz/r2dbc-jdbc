@@ -4,5 +4,5 @@ import lombok.AllArgsConstructor;
 
 @AllArgsConstructor
 public class JdbcPacket {
-    Object data;
+    final Object data;
 }

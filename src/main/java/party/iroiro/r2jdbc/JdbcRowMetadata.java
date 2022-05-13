@@ -8,12 +8,10 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.NoSuchElementException;
 
-@Slf4j
 public class JdbcRowMetadata implements RowMetadata {
     private final ArrayList<JdbcColumnMetadata> columns;
 
     public JdbcRowMetadata(ArrayList<JdbcColumnMetadata> columns) {
-        log.trace("Info: {}", columns);
         this.columns = columns;
     }
 
@@ -44,5 +42,10 @@ public class JdbcRowMetadata implements RowMetadata {
     @Override
     public List<? extends ColumnMetadata> getColumnMetadatas() {
         return columns;
+    }
+
+    @Override
+    public String toString() {
+        return columns.toString();
     }
 }

@@ -5,7 +5,6 @@ import io.r2dbc.spi.Row;
 import io.r2dbc.spi.RowMetadata;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
-import lombok.extern.slf4j.Slf4j;
 import org.reactivestreams.Publisher;
 import party.iroiro.r2jdbc.util.Pair;
 import reactor.core.publisher.Flux;
@@ -21,7 +20,6 @@ import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.function.Predicate;
 
-@Slf4j
 public class JdbcResult implements Result {
     private static final Cleaner cleaner = Cleaner.create();
 
