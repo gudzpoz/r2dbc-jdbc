@@ -236,7 +236,7 @@ public class JdbcWorker implements Runnable {
                         }
                         ArrayList<Object> rowData = new ArrayList<>(columns);
                         for (int j = 0; j < columns; j++) {
-                            Class<?> type = metadata.get(i).getJavaType();
+                            Class<?> type = metadata.get(j).getJavaType();
                             if (type == null) {
                                 rowData.add(row.getObject(j + 1));
                             } else {

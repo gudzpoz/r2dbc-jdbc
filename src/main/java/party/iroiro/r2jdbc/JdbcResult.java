@@ -5,6 +5,7 @@ import io.r2dbc.spi.Row;
 import io.r2dbc.spi.RowMetadata;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
 import org.reactivestreams.Publisher;
 import party.iroiro.r2jdbc.util.Pair;
 import reactor.core.publisher.Flux;
@@ -20,6 +21,7 @@ import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.function.Predicate;
 
+@Slf4j
 public class JdbcResult implements Result {
     private static final Cleaner cleaner = Cleaner.create();
 
@@ -84,26 +86,38 @@ public class JdbcResult implements Result {
 
     private Flux<JdbcRow> fetchRows(JdbcRowMetadata metadata) {
         return Flux.create(sink -> {
-            sink.onRequest(number -> conn.send(JdbcJob.Job.RESULT_ROWS,
-                    new JdbcResultRequest(result.get(),
-                            fetchSize > 0 ? fetchSize : (int) number, metadata),
-                    packet -> (List<?>) packet.data)
-                    .doOnNext(list -> {
-                        for (Object item : list) {
-                            if (item == null) {
-                                sink.complete();
-                                break;
+            sink.onRequest(number -> {
+                if (!conn.offerNow(
+                        JdbcJob.Job.RESULT_ROWS,
+                        new JdbcResultRequest(
+                                result.get(),
+                                fetchSize > 0 ? fetchSize : (int) number, metadata
+                        ),
+                        (packet, exception) -> {
+                            List<?> list = (List<?>) packet.data;
+                            for (Object item : list) {
+                                if (item == null) {
+                                    sink.complete();
+                                    break;
+                                }
+                                assert item instanceof JdbcRow;
+                                JdbcRow row = (JdbcRow) item;
+                                row.setMetadata(metadata);
+                                sink.next(row);
                             }
-                            assert item instanceof JdbcRow;
-                            JdbcRow row = (JdbcRow) item;
-                            row.setMetadata(metadata);
-                            sink.next(row);
-                        }
-                    }).doOnError(sink::error)
-                    .subscribe());
+                        })) {
+                    sink.error(new IndexOutOfBoundsException("Unable to add fetch job to queue"));
+                }
+            });
             sink.onDispose(() -> {
                 ResultSet set = result.getAndSet(null);
-                conn.voidSend(JdbcJob.Job.CLOSE_RESULT, set).subscribe();
+                if (!conn.offerNow(JdbcJob.Job.CLOSE_RESULT, set, ((packet, exception) -> {
+                    if (exception != null) {
+                        log.error("Failed to close ResultSet on disposal", exception);
+                    }
+                }))) {
+                    log.error("Failed to offer job to dispose ResultSet");
+                }
             });
         });
     }
@@ -177,7 +191,11 @@ public class JdbcResult implements Result {
         public void run() {
             ResultSet set = result.getAndSet(null);
             if (set != null) {
-                conn.voidSend(JdbcJob.Job.CLOSE_RESULT, set).subscribe();
+                conn.offerNow(JdbcJob.Job.CLOSE_RESULT, set, ((packet, exception) -> {
+                    if (exception != null) {
+                        log.error("Failed to close ResultSet", exception);
+                    }
+                }));
             }
         }
     }

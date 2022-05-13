@@ -10,6 +10,7 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.BiConsumer;
 import java.util.function.Function;
 
 public class JdbcConnection implements Connection {
@@ -49,16 +50,20 @@ public class JdbcConnection implements Connection {
     Mono<Void> voidSendValid(JdbcJob.Job job, Object data) {
         return Mono.create(voidMonoSink -> voidMonoSink.onRequest(
                 ignored -> {
-                    if (!jobs.offer(new JdbcJob(job, data, (i, e) -> {
+                    if (!offerNow(job, data, (i, e) -> {
                         if (e == null) {
                             voidMonoSink.success();
                         } else {
                             voidMonoSink.error(e);
                         }
-                    }))) {
+                    })) {
                         voidMonoSink.error(new IndexOutOfBoundsException("Unable to push to queue"));
                     }
                 }));
+    }
+
+    boolean offerNow(JdbcJob.Job job, Object data, BiConsumer<JdbcPacket, Exception> consumer) {
+        return jobs.offer(new JdbcJob(job, data, consumer));
     }
 
     <T> Mono<T> send(JdbcJob.Job job, Object data, Function<JdbcPacket, T> converter) {
@@ -67,13 +72,13 @@ public class JdbcConnection implements Connection {
         }
         return Mono.create(sink -> sink.onRequest(
                 ignored -> {
-                    if (!jobs.offer(new JdbcJob(job, data, (i, e) -> {
+                    if (!offerNow(job, data, (i, e) -> {
                         if (e == null) {
                             sink.success(converter.apply(i));
                         } else {
                             sink.error(e);
                         }
-                    }))) {
+                    })) {
                         sink.error(new IndexOutOfBoundsException("Unable to push to queue"));
                     }
                 }));
