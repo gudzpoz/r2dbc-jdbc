@@ -6,7 +6,6 @@ import party.iroiro.r2jdbc.util.QueueDispatcher;
 import reactor.core.publisher.Mono;
 
 import java.time.Duration;
-import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
@@ -14,18 +13,14 @@ import java.util.function.BiConsumer;
 import java.util.function.Function;
 
 public class JdbcConnection implements Connection {
-    private final BlockingQueue<JdbcJob> jobs;
     private final AtomicReference<ConnectionMetadata> metadata;
     private final AtomicBoolean autoCommit;
     private final AtomicBoolean valid;
     private final AtomicReference<IsolationLevel> isolationLevel;
-    private final QueueDispatcher<JdbcPacket> adapter;
-    private final ConnectionFactoryOptions options;
+    private final JdbcWorker worker;
 
-    JdbcConnection(QueueDispatcher<JdbcPacket> adapter, ConnectionFactoryOptions options) {
-        this.adapter = adapter;
-        this.options = options;
-        this.jobs = new LinkedBlockingDeque<>();
+    JdbcConnection(JdbcWorker worker) {
+        this.worker = worker;
 
         autoCommit = new AtomicBoolean(true);
         valid = new AtomicBoolean(true);
@@ -33,10 +28,12 @@ public class JdbcConnection implements Connection {
         metadata = new AtomicReference<>();
     }
 
+    JdbcConnection(QueueDispatcher<JdbcPacket> adapter, ConnectionFactoryOptions options) {
+        this(new JdbcWorker(new LinkedBlockingDeque<>(), adapter.subQueue(), options));
+    }
+
     Mono<JdbcConnection> init() {
-        new Thread(new JdbcWorker(jobs, adapter.subQueue(), options)).start();
-        return send(JdbcJob.Job.INIT, null, packet -> (JdbcConnectionMetadata) packet.data)
-                .doOnNext(metadata::set).thenReturn(this);
+        return worker.start().doOnNext(metadata::set).thenReturn(this);
     }
 
     Mono<Void> voidSend(JdbcJob.Job job, Object data) {
@@ -44,69 +41,38 @@ public class JdbcConnection implements Connection {
         if (!v) {
             return Mono.empty();
         }
-        return voidSendValid(job, data);
-    }
-
-    Mono<Void> voidSendValid(JdbcJob.Job job, Object data) {
-        return Mono.create(voidMonoSink -> voidMonoSink.onRequest(
-                ignored -> {
-                    if (!offerNow(job, data, (i, e) -> {
-                        if (e == null) {
-                            voidMonoSink.success();
-                        } else {
-                            voidMonoSink.error(new JdbcException(e));
-                        }
-                    })) {
-                        voidMonoSink.error(new IndexOutOfBoundsException("Unable to push to queue"));
-                    }
-                }));
+        return JdbcWorker.voidSend(worker, job, data);
     }
 
     boolean offerNow(JdbcJob.Job job, Object data, BiConsumer<JdbcPacket, Exception> consumer) {
-        return jobs.offer(new JdbcJob(job, data, consumer));
+        return JdbcWorker.offerNow(worker, job, data, consumer);
     }
 
     <T> Mono<T> send(JdbcJob.Job job, Object data, Function<JdbcPacket, T> converter) {
         if (!valid.get()) {
             return Mono.empty();
         }
-        return Mono.create(sink -> sink.onRequest(
-                ignored -> {
-                    if (!offerNow(job, data, (i, e) -> {
-                        if (e == null) {
-                            sink.success(converter.apply(i));
-                        } else {
-                            sink.error(new JdbcException(e));
-                        }
-                    })) {
-                        sink.error(new IndexOutOfBoundsException("Unable to push to queue"));
-                    }
-                }));
+        return JdbcWorker.send(worker, job, data, converter);
     }
 
     @Override
-    public Publisher<Void> beginTransaction() {
+    public Mono<Void> beginTransaction() {
         autoCommit.set(false);
         return voidSend(JdbcJob.Job.START_TRANSACTION, null);
     }
 
     @Override
-    public Publisher<Void> beginTransaction(TransactionDefinition definition) {
+    public Mono<Void> beginTransaction(TransactionDefinition definition) {
         return beginTransaction();
     }
 
     @Override
     public Mono<Void> close() {
-        if (valid.compareAndSet(true, false)) {
-            valid.set(false);
-            return voidSendValid(JdbcJob.Job.CLOSE, null);
-        } else {
-            return Mono.empty();
-        }
+        return worker.close();
     }
 
     @Override
-    public Publisher<Void> commitTransaction() {
+    public Mono<Void> commitTransaction() {
         return voidSend(JdbcJob.Job.END_TRANSACTION, null);
     }
 
@@ -121,7 +87,7 @@ public class JdbcConnection implements Connection {
     }
 
     @Override
-    public Statement createStatement(String sql) {
+    public JdbcStatement createStatement(String sql) {
         return new JdbcStatement(sql, this);
     }
 
@@ -146,7 +112,7 @@ public class JdbcConnection implements Connection {
     }
 
     @Override
-    public Publisher<Void> rollbackTransaction() {
+    public Mono<Void> rollbackTransaction() {
         return voidSend(JdbcJob.Job.ROLLBACK_TRANSACTION, null);
     }
 
@@ -156,7 +122,7 @@ public class JdbcConnection implements Connection {
     }
 
     @Override
-    public Publisher<Void> setAutoCommit(boolean autoCommit) {
+    public Mono<Void> setAutoCommit(boolean autoCommit) {
         return voidSend(JdbcJob.Job.SET_AUTO_COMMIT, autoCommit)
                 .then(send(JdbcJob.Job.GET_AUTO_COMMIT, null, (packet -> (Boolean) packet.data)))
                 .doOnNext(this.autoCommit::set).then();
@@ -169,7 +135,7 @@ public class JdbcConnection implements Connection {
      * @return {@link Mono#empty()}
      */
     @Override
-    public Publisher<Void> setLockWaitTimeout(Duration timeout) {
+    public Mono<Void> setLockWaitTimeout(Duration timeout) {
         return Mono.empty();
     }
 
@@ -180,23 +146,27 @@ public class JdbcConnection implements Connection {
      * @return {@link Mono#empty()}
      */
     @Override
-    public Publisher<Void> setStatementTimeout(Duration timeout) {
+    public Mono<Void> setStatementTimeout(Duration timeout) {
         return Mono.empty();
     }
 
     @Override
-    public Publisher<Void> setTransactionIsolationLevel(IsolationLevel isolationLevel) {
+    public Mono<Void> setTransactionIsolationLevel(IsolationLevel isolationLevel) {
         this.isolationLevel.set(isolationLevel);
         return voidSend(JdbcJob.Job.SET_ISOLATION_LEVEL, isolationLevel);
     }
 
     @Override
-    public Publisher<Boolean> validate(ValidationDepth depth) {
+    public Mono<Boolean> validate(ValidationDepth depth) {
         boolean v = valid.get();
         if (depth == ValidationDepth.LOCAL || !v) {
             return Mono.just(v);
         } else {
             return send(JdbcJob.Job.VALIDATE, null, packet -> (Boolean) packet.data);
         }
+    }
+
+    public JdbcWorker getWorker() {
+        return worker;
     }
 }

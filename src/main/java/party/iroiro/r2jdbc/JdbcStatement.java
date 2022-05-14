@@ -1,8 +1,7 @@
 package party.iroiro.r2jdbc;
 
-import io.r2dbc.spi.Result;
 import io.r2dbc.spi.Statement;
-import org.reactivestreams.Publisher;
+import reactor.core.publisher.Mono;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -96,7 +95,7 @@ public class JdbcStatement implements Statement {
     }
 
     @Override
-    public Publisher<? extends Result> execute() {
+    public Mono<JdbcResult> execute() {
         return conn.send(JdbcJob.Job.EXECUTE_STATEMENT, this,
                 packet -> new JdbcResult(conn, packet.data, size.get()));
     }

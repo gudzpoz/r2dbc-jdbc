@@ -7,14 +7,22 @@ import lbmq.LinkedBlockingMultiQueue;
 import lombok.extern.slf4j.Slf4j;
 import party.iroiro.r2jdbc.util.Pair;
 import party.iroiro.r2jdbc.util.QueueItem;
+import reactor.core.publisher.Mono;
 
 import java.math.BigDecimal;
 import java.sql.*;
 import java.time.*;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
+import java.util.function.Function;
 
 @Slf4j
 class JdbcWorker implements Runnable {
@@ -45,15 +53,29 @@ class JdbcWorker implements Runnable {
     private final BlockingQueue<JdbcJob> jobs;
     private final LinkedBlockingMultiQueue<Integer, QueueItem<JdbcPacket>>.SubQueue out;
     private final ConnectionFactoryOptions options;
+    private final Thread thread;
+    private final AtomicBoolean starting;
+    private final AtomicReference<JdbcConnectionMetadata> metadata;
+    private final AtomicInteger refCount;
+    private final Duration pollDuration;
+    private final boolean shared;
     private Connection conn;
 
     JdbcWorker(BlockingQueue<JdbcJob> jobs,
-                      LinkedBlockingMultiQueue<Integer, QueueItem<JdbcPacket>>.SubQueue out,
-                      ConnectionFactoryOptions options) {
+               LinkedBlockingMultiQueue<Integer, QueueItem<JdbcPacket>>.SubQueue out,
+               ConnectionFactoryOptions options) {
         this.jobs = jobs;
         this.out = out;
         this.options = options;
         this.conn = null;
+        this.thread = new Thread(this);
+        String waitTime = (String) options.getValue(JdbcConnectionFactoryProvider.WAIT);
+        int time = waitTime == null ? 0 : Integer.parseInt(waitTime);
+        this.pollDuration = Duration.ofMillis(time);
+        metadata = new AtomicReference<>();
+        starting = new AtomicBoolean(false);
+        refCount = new AtomicInteger(0);
+        shared = options.hasOption(JdbcConnectionFactoryProvider.SHARED);
     }
 
     private static void put(Class<?> clazz, int... types) {
@@ -66,6 +88,48 @@ class JdbcWorker implements Runnable {
         JdbcConnectionFactoryProvider.JdbcConnectionDetails details =
                 JdbcConnectionFactoryProvider.getJdbcConnectionUrl(options);
         return DriverManager.getConnection(details.getUrl(), details.getProperties());
+    }
+
+    static Mono<Void> voidSend(JdbcWorker worker, JdbcJob.Job job, Object data) {
+        return Mono.create(voidMonoSink -> voidMonoSink.onRequest(
+                ignored -> {
+                    if (!offerNow(worker, job, data, (i, e) -> {
+                        if (e == null) {
+                            voidMonoSink.success();
+                        } else {
+                            voidMonoSink.error(new JdbcException(e));
+                        }
+                    })) {
+                        voidMonoSink.error(new JdbcException(new IndexOutOfBoundsException("Unable to push to queue")));
+                    }
+                }));
+    }
+
+    static boolean offerNow(JdbcWorker worker,
+                            JdbcJob.Job job,
+                            Object data,
+                            BiConsumer<JdbcPacket, Exception> consumer) {
+        if (worker.isAlive()) {
+            // FIXME: Edge cases
+            return worker.getJobQueue().offer(new JdbcJob(job, data, consumer));
+        } else {
+            return false;
+        }
+    }
+
+    static <T> Mono<T> send(JdbcWorker worker, JdbcJob.Job job, Object data, Function<JdbcPacket, T> converter) {
+        return Mono.create(sink -> sink.onRequest(
+                ignored -> {
+                    if (!offerNow(worker, job, data, (i, e) -> {
+                        if (e == null) {
+                            sink.success(converter.apply(i));
+                        } else {
+                            sink.error(new JdbcException(e));
+                        }
+                    })) {
+                        sink.error(new JdbcException(new IndexOutOfBoundsException("Unable to push to queue")));
+                    }
+                }));
     }
 
     private void offer(JdbcPacket packet, BiConsumer<JdbcPacket, Exception> consumer) {
@@ -83,7 +147,17 @@ class JdbcWorker implements Runnable {
     }
 
     private void takeAndProcess() throws InterruptedException {
-        JdbcJob job = jobs.take();
+        JdbcJob job = pollDuration.isZero() ?
+                jobs.take() : jobs.poll(pollDuration.toMillis(), TimeUnit.MILLISECONDS);
+        if (job == null) {
+            if (refCount.get() == 0) {
+                if (shared) {
+                    starting.set(false);
+                    throw new InterruptedException("Closing after no connection for sometime");
+                }
+            }
+            return;
+        }
         log.trace("Processing: {}", job.job);
         switch (job.job) {
             case INIT:
@@ -260,6 +334,7 @@ class JdbcWorker implements Runnable {
                 }
                 break;
             case CLOSE:
+                starting.set(false);
                 offer(job.consumer);
                 throw new InterruptedException("Connection closing");
         }
@@ -315,15 +390,16 @@ class JdbcWorker implements Runnable {
 
     @Override
     public void run() {
-        Thread.currentThread().setName("R2jdbcWorker");
-        log.trace("Listening");
+        Thread current = Thread.currentThread();
+        current.setName("R2jdbcWorker-" + current.getId());
+        log.debug("Listening");
         try {
             while (!Thread.interrupted()) {
                 takeAndProcess();
             }
         } catch (InterruptedException ignored) {
         }
-        log.trace("Cleaning up");
+        log.debug("Cleaning up");
         while (jobs.peek() != null) {
             try {
                 takeAndProcess();
@@ -342,6 +418,46 @@ class JdbcWorker implements Runnable {
                 log.error("Error closing database", e);
             }
         }
-        log.trace("Exiting");
+        log.debug("Exiting");
+    }
+
+    public Mono<Void> close() {
+        if (refCount.decrementAndGet() == 0) {
+            if (!shared || pollDuration.isZero()) {
+                return closeNow();
+            }
+        }
+        return Mono.empty();
+    }
+
+    public Mono<Void> closeNow() {
+        return Mono.fromCallable(starting::get).flatMap(starting -> {
+            if (starting) {
+                return JdbcWorker.voidSend(this, JdbcJob.Job.CLOSE, null);
+            } else {
+                return Mono.empty();
+            }
+        });
+    }
+
+    public BlockingQueue<JdbcJob> getJobQueue() {
+        return jobs;
+    }
+
+    public boolean isAlive() {
+        return starting.get() && thread.isAlive();
+    }
+
+    public Mono<JdbcConnectionMetadata> start() {
+        refCount.incrementAndGet();
+        if (!starting.getAndSet(true) && !thread.isAlive()) {
+            try {
+                thread.start();
+                return send(this, JdbcJob.Job.INIT, null, packet -> (JdbcConnectionMetadata) packet.data)
+                        .doOnNext(metadata::set);
+            } catch (IllegalThreadStateException ignored) {
+            }
+        }
+        return Mono.just(metadata.get());
     }
 }
