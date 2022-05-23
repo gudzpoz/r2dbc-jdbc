@@ -97,8 +97,8 @@ public class JdbcConnection implements Connection {
 
     @Override
     public Mono<Void> close() {
-        valid.set(false);
-        return worker.close();
+        return Mono.fromRunnable(() ->
+                valid.set(false)).then(Mono.defer(worker::close));
     }
 
     @Override

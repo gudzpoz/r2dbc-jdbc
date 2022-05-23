@@ -136,7 +136,7 @@ public class JdbcStressTest {
                             Flux<JdbcResult> execute = second.execute();
                             return Flux.merge(
                                     first, execute, connection.commitTransaction()
-                            ).log();
+                            );
                         }))).blockLast();
     }
 }

@@ -117,10 +117,10 @@ public class JdbcResult implements Result {
                 ResultSet set = result.getAndSet(null);
                 if (!conn.offerNow(JdbcJob.Job.CLOSE_RESULT, set, ((packet, exception) -> {
                     if (exception != null) {
-                        log.error("Failed to close ResultSet on disposal", exception);
+                        log.warn("Failed to close ResultSet on disposal", exception);
                     }
                 }))) {
-                    log.error("Failed to offer job to dispose ResultSet");
+                    log.warn("Failed to offer job to dispose ResultSet");
                 }
             });
         });
