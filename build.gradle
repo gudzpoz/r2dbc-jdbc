@@ -12,6 +12,7 @@ repositories {
 dependencies {
     implementation 'io.r2dbc:r2dbc-spi:1.0.0.RELEASE'
     implementation 'io.projectreactor:reactor-core:3.4.18'
+    implementation 'party.iroiro:reactor-locks:0.4.0'
     implementation 'com.github.marianobarrios:linked-blocking-multi-queue:0.4.0'
     implementation 'org.slf4j:slf4j-api:1.7.36'
     compileOnly 'org.projectlombok:lombok:1.18.24'

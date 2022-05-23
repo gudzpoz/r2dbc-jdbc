@@ -5,60 +5,41 @@ import io.r2dbc.spi.ConnectionFactoryOptions;
 import io.r2dbc.spi.IsolationLevel;
 import lbmq.LinkedBlockingMultiQueue;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.beanutils.ConstructorUtils;
+import party.iroiro.r2jdbc.codecs.Codec;
+import party.iroiro.r2jdbc.codecs.DefaultCodec;
 import party.iroiro.r2jdbc.util.Pair;
 import party.iroiro.r2jdbc.util.QueueItem;
+import party.iroiro.r2jdbc.util.SingletonMono;
 import reactor.core.publisher.Mono;
 
-import java.math.BigDecimal;
+import java.lang.reflect.InvocationTargetException;
 import java.sql.*;
-import java.time.*;
+import java.time.Duration;
 import java.util.ArrayList;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
 
 @Slf4j
 class JdbcWorker implements Runnable {
-    private static final ConcurrentHashMap<Integer, Class<?>> columnTypeGuesses;
-
-    static {
-        columnTypeGuesses = new ConcurrentHashMap<>();
-        put(Void.class, Types.NULL); // FIXME: Probably not
-        put(String.class, Types.CHAR, Types.VARCHAR, Types.LONGVARCHAR,
-                Types.NCHAR, Types.NVARCHAR, Types.LONGNVARCHAR);
-        put(BigDecimal.class, Types.NUMERIC, Types.DECIMAL);
-        put(Long.class, Types.BIGINT);
-        put(Integer.class, Types.INTEGER, Types.TINYINT, Types.SMALLINT);
-        put(Float.class, Types.FLOAT, Types.REAL);
-        put(Double.class, Types.DOUBLE);
-        put(byte[].class, Types.BINARY, Types.VARBINARY, Types.LONGVARBINARY);
-        put(Boolean.class, Types.BOOLEAN, Types.BIT);
-        put(LocalDate.class, Types.DATE);
-        put(LocalTime.class, Types.TIME);
-        put(OffsetTime.class, Types.TIME_WITH_TIMEZONE);
-        put(LocalDateTime.class, Types.TIMESTAMP);
-        put(Instant.class, Types.TIMESTAMP_WITH_TIMEZONE);
-        put(Object.class, Types.JAVA_OBJECT, Types.OTHER);
-        put(Object[].class, Types.ARRAY);
-        // TODO: Clob, Blob?
-    }
 
     private final BlockingQueue<JdbcJob> jobs;
     private final LinkedBlockingMultiQueue<Integer, QueueItem<JdbcPacket>>.SubQueue out;
     private final ConnectionFactoryOptions options;
     private final Thread thread;
-    private final AtomicBoolean starting;
-    private final AtomicReference<JdbcConnectionMetadata> metadata;
+    private final SingletonMono<JdbcConnectionMetadata> metadata;
     private final AtomicInteger refCount;
     private final Duration pollDuration;
     private final boolean shared;
+    private final List<JdbcJob> closeJobs;
+    private State state;
+    private Codec codec;
     private Connection conn;
 
     JdbcWorker(BlockingQueue<JdbcJob> jobs,
@@ -72,16 +53,12 @@ class JdbcWorker implements Runnable {
         String waitTime = (String) options.getValue(JdbcConnectionFactoryProvider.WAIT);
         int time = waitTime == null ? 0 : Integer.parseInt(waitTime);
         this.pollDuration = Duration.ofMillis(time);
-        metadata = new AtomicReference<>();
-        starting = new AtomicBoolean(false);
+        metadata = new SingletonMono<>();
         refCount = new AtomicInteger(0);
         shared = options.hasOption(JdbcConnectionFactoryProvider.SHARED);
-    }
-
-    private static void put(Class<?> clazz, int... types) {
-        for (int type : types) {
-            columnTypeGuesses.put(type, clazz);
-        }
+        codec = null;
+        closeJobs = new LinkedList<>();
+        state = State.RUNNABLE;
     }
 
     private static Connection getConnection(ConnectionFactoryOptions options) throws SQLException {
@@ -109,7 +86,7 @@ class JdbcWorker implements Runnable {
                             JdbcJob.Job job,
                             Object data,
                             BiConsumer<JdbcPacket, Exception> consumer) {
-        if (worker.isAlive()) {
+        if (worker.notEnded()) {
             // FIXME: Edge cases
             return worker.getJobQueue().offer(new JdbcJob(job, data, consumer));
         } else {
@@ -132,6 +109,26 @@ class JdbcWorker implements Runnable {
                 }));
     }
 
+    private synchronized boolean notEnded() {
+        return state != State.ENDED;
+    }
+
+    private Codec initCodec()
+            throws ClassNotFoundException, ClassCastException, InvocationTargetException,
+            NoSuchMethodException, IllegalAccessException, InstantiationException {
+        if (options.hasOption(JdbcConnectionFactoryProvider.CODEC)) {
+            String value = (String) options.getValue(JdbcConnectionFactoryProvider.CODEC);
+            Class<?> aClass = Class.forName(value);
+            if (Codec.class.isAssignableFrom(aClass)) {
+                return (Codec) ConstructorUtils.invokeConstructor(aClass, null);
+            } else {
+                throw new ClassCastException(aClass.getName());
+            }
+        } else {
+            return new DefaultCodec();
+        }
+    }
+
     private void offer(JdbcPacket packet, BiConsumer<JdbcPacket, Exception> consumer) {
         out.offer(new QueueItem<>(packet, null, consumer, true));
     }
@@ -150,10 +147,12 @@ class JdbcWorker implements Runnable {
         JdbcJob job = pollDuration.isZero() ?
                 jobs.take() : jobs.poll(pollDuration.toMillis(), TimeUnit.MILLISECONDS);
         if (job == null) {
-            if (refCount.get() == 0) {
-                if (shared) {
-                    starting.set(false);
-                    throw new InterruptedException("Closing after no connection for sometime");
+            synchronized (this) {
+                if (refCount.get() == 0) {
+                    if (shared) {
+                        state = State.ENDED;
+                        throw new InterruptedException("Closing after no connection for sometime");
+                    }
                 }
             }
             return;
@@ -279,15 +278,7 @@ class JdbcWorker implements Runnable {
                     ArrayList<JdbcColumnMetadata> columns = new ArrayList<>(count);
                     for (int i = 0; i < count; i++) {
                         log.trace("Column Type: {}", metadata.getColumnType(i + 1));
-                        columns.add(new JdbcColumnMetadata(
-                                new JdbcColumnMetadata.JdbcColumnType(
-                                        columnTypeGuesses
-                                                .getOrDefault(metadata.getColumnType(i + 1),
-                                                        null),
-                                        metadata.getColumnTypeName(i + 1)
-                                ),
-                                metadata.getColumnName(i + 1)
-                        ));
+                        columns.add(new JdbcColumnMetadata(metadata, codec, i + 1));
                     }
                     offer(new JdbcPacket(new JdbcRowMetadata(columns)), job.consumer);
                 } catch (SQLException e) {
@@ -310,11 +301,12 @@ class JdbcWorker implements Runnable {
                         }
                         ArrayList<Object> rowData = new ArrayList<>(columns);
                         for (int j = 0; j < columns; j++) {
-                            Class<?> type = metadata.get(j).getJavaType();
+                            ColumnMetadata meta = metadata.get(j);
+                            Class<?> type = (Class<?>) meta.getNativeTypeMetadata();
                             if (type == null) {
-                                rowData.add(row.getObject(j + 1));
+                                rowData.add(codec.decode(row.getObject(j + 1), meta.getJavaType()));
                             } else {
-                                rowData.add(row.getObject(j + 1, type));
+                                rowData.add(codec.decode(row.getObject(j + 1, type), meta.getJavaType()));
                             }
                         }
                         response.add(new JdbcRow(rowData));
@@ -334,8 +326,10 @@ class JdbcWorker implements Runnable {
                 }
                 break;
             case CLOSE:
-                starting.set(false);
-                offer(job.consumer);
+                synchronized (this) {
+                    state = State.ENDED;
+                }
+                closeJobs.add(job);
                 throw new InterruptedException("Connection closing");
         }
         log.trace("Process finished: {}", job.job);
@@ -384,7 +378,7 @@ class JdbcWorker implements Runnable {
 
     private void bindStatement(PreparedStatement s, Map<Integer, Object> map) throws SQLException {
         for (int i = 0; i < map.size(); i++) {
-            s.setObject(i + 1, map.getOrDefault(i, null));
+            s.setObject(i + 1, codec.encode(conn, map.getOrDefault(i, null)));
         }
     }
 
@@ -392,6 +386,19 @@ class JdbcWorker implements Runnable {
     public void run() {
         Thread current = Thread.currentThread();
         current.setName("R2jdbcWorker-" + current.getId());
+
+        try {
+            codec = initCodec();
+        } catch (ClassNotFoundException | ClassCastException
+                | InvocationTargetException | NoSuchMethodException
+                | IllegalAccessException | InstantiationException e) {
+            synchronized (this) {
+                state = State.ENDED;
+            }
+            log.error("Failed to instantiate Codec", e);
+            return;
+        }
+
         log.debug("Listening");
         try {
             while (!Thread.interrupted()) {
@@ -418,6 +425,9 @@ class JdbcWorker implements Runnable {
                 log.error("Error closing database", e);
             }
         }
+        closeJobs.forEach(job -> offer(job.consumer));
+        closeJobs.clear();
+        metadata.set(null);
         log.debug("Exiting");
     }
 
@@ -431,11 +441,15 @@ class JdbcWorker implements Runnable {
     }
 
     public Mono<Void> closeNow() {
-        return Mono.fromCallable(starting::get).flatMap(starting -> {
-            if (starting) {
-                return JdbcWorker.voidSend(this, JdbcJob.Job.CLOSE, null);
-            } else {
-                return Mono.empty();
+        return Mono.defer(() -> {
+            synchronized (this) {
+                if (state == State.STARTING) {
+                    Mono<Void> voidMono = JdbcWorker.voidSend(this, JdbcJob.Job.CLOSE, null);
+                    state = State.CLOSING;
+                    return voidMono;
+                } else {
+                    return Mono.empty();
+                }
             }
         });
     }
@@ -444,20 +458,27 @@ class JdbcWorker implements Runnable {
         return jobs;
     }
 
-    public boolean isAlive() {
-        return starting.get() && thread.isAlive();
+    public synchronized boolean isAlive() {
+        return state == State.STARTING;
     }
 
     public Mono<JdbcConnectionMetadata> start() {
         refCount.incrementAndGet();
-        if (!starting.getAndSet(true) && !thread.isAlive()) {
-            try {
+        synchronized (this) {
+            if (state == State.RUNNABLE) {
+                state = State.STARTING;
                 thread.start();
                 return send(this, JdbcJob.Job.INIT, null, packet -> (JdbcConnectionMetadata) packet.data)
                         .doOnNext(metadata::set);
-            } catch (IllegalThreadStateException ignored) {
+            } else if (state == State.STARTING) {
+                return metadata.get();
+            } else {
+                return Mono.error(new IllegalStateException("Thread ended"));
             }
         }
-        return Mono.just(metadata.get());
+    }
+
+    enum State {
+        RUNNABLE, STARTING, CLOSING, ENDED,
     }
 }

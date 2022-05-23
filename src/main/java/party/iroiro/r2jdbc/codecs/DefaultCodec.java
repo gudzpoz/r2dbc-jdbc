@@ -1,0 +1,133 @@
+package party.iroiro.r2jdbc.codecs;
+
+import java.io.IOException;
+import java.io.OutputStream;
+import java.math.BigDecimal;
+import java.nio.ByteBuffer;
+import java.nio.channels.Channels;
+import java.nio.charset.StandardCharsets;
+import java.sql.*;
+import java.time.*;
+import java.util.HashMap;
+
+public class DefaultCodec implements Codec {
+    private final HashMap<Integer, Class<?>> columnTypeGuesses;
+
+    public DefaultCodec() {
+        columnTypeGuesses = new HashMap<>();
+
+        initGuessMap();
+    }
+
+    private void initGuessMap() {
+        put(Object.class, Types.NULL);
+        put(String.class, Types.CHAR, Types.VARCHAR, Types.LONGVARCHAR,
+                Types.NCHAR, Types.NVARCHAR, Types.LONGNVARCHAR);
+        put(BigDecimal.class, Types.NUMERIC, Types.DECIMAL);
+        put(Long.class, Types.BIGINT);
+        put(Integer.class, Types.INTEGER);
+        put(Short.class, Types.SMALLINT);
+        put(Byte.class, Types.TINYINT);
+        put(Float.class, Types.FLOAT, Types.REAL);
+        put(Double.class, Types.DOUBLE);
+        put(byte[].class, Types.BINARY, Types.VARBINARY, Types.LONGVARBINARY);
+        put(Boolean.class, Types.BOOLEAN, Types.BIT);
+        put(LocalDate.class, Types.DATE);
+        put(LocalTime.class, Types.TIME);
+        put(OffsetTime.class, Types.TIME_WITH_TIMEZONE);
+        put(LocalDateTime.class, Types.TIMESTAMP);
+        put(OffsetDateTime.class, Types.TIMESTAMP_WITH_TIMEZONE);
+        put(Object.class, Types.JAVA_OBJECT, Types.OTHER);
+        put(Object[].class, Types.ARRAY);
+        put(Clob.class, Types.CLOB);
+        put(NClob.class, Types.NCLOB);
+        put(Blob.class, Types.BLOB);
+    }
+
+    @Override
+    public Class<?> guess(ResultSetMetaData row, int column) throws SQLException {
+        return columnTypeGuesses.getOrDefault(row.getColumnType(column), null);
+    }
+
+    @Override
+    public Class<?> converted(Class<?> jdbcType) {
+        if (Clob.class.isAssignableFrom(jdbcType)) {
+            return JdbcClob.class;
+        } else if (NClob.class.isAssignableFrom(jdbcType)) {
+            return JdbcClob.class;
+        } else if (Blob.class.isAssignableFrom(jdbcType)) {
+            return JdbcBlob.class;
+        } else if (byte[].class.equals(jdbcType)) {
+            return ByteBuffer.class;
+        } else {
+            return jdbcType;
+        }
+    }
+
+    private void put(Class<?> clazz, int... types) {
+        for (int type : types) {
+            columnTypeGuesses.put(type, clazz);
+        }
+    }
+
+    @Override
+    public Object decode(Object object, Class<?> tClass)
+            throws UnsupportedOperationException, SQLException {
+        if (io.r2dbc.spi.Clob.class.isAssignableFrom(tClass)) {
+            if (object instanceof Clob) {
+                try {
+                    byte[] bytes = ((Clob) object).getAsciiStream().readAllBytes();
+                    return new JdbcClob(new String(bytes));
+                } catch (IOException e) {
+                    throw new SQLException(e);
+                }
+            }
+            throw new UnsupportedOperationException();
+        }
+        if (io.r2dbc.spi.Blob.class.isAssignableFrom(tClass)) {
+            if (object instanceof Blob) {
+                try {
+                    byte[] bytes = ((Blob) object).getBinaryStream().readAllBytes();
+                    return new JdbcBlob(ByteBuffer.wrap(bytes));
+                } catch (IOException e) {
+                    throw new SQLException(e);
+                }
+            }
+            throw new UnsupportedOperationException();
+        }
+        if (object instanceof byte[]) {
+            return ByteBuffer.wrap((byte[]) object);
+        }
+        return object;
+    }
+
+    @Override
+    public <T> Object encode(Connection connection, T object)
+            throws UnsupportedOperationException, SQLException {
+        if (object instanceof JdbcClob) {
+            Clob clob = connection.createClob();
+            try {
+                OutputStream stream = clob.setAsciiStream(0);
+                stream.write(
+                        ((JdbcClob) object).getContent().getBytes(StandardCharsets.UTF_8)
+                );
+                stream.close();
+            } catch (IOException e) {
+                throw new SQLException(e);
+            }
+            return clob;
+        } else if (object instanceof JdbcBlob) {
+            Blob blob = connection.createBlob();
+            try {
+                OutputStream outputStream = blob.setBinaryStream(0);
+                Channels.newChannel(outputStream).write(((JdbcBlob) object).getBuffer());
+                outputStream.close();
+            } catch (IOException e) {
+                throw new SQLException(e);
+            }
+            return blob;
+        } else {
+            return object;
+        }
+    }
+}

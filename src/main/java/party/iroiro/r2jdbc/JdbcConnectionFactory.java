@@ -6,6 +6,8 @@ import io.r2dbc.spi.ConnectionFactoryMetadata;
 import io.r2dbc.spi.ConnectionFactoryOptions;
 import lbmq.LinkedBlockingMultiQueue;
 import lombok.extern.slf4j.Slf4j;
+import party.iroiro.lock.Lock;
+import party.iroiro.lock.ReactiveLock;
 import party.iroiro.r2jdbc.util.QueueDispatcher;
 import reactor.core.publisher.Mono;
 
@@ -17,6 +19,7 @@ public class JdbcConnectionFactory implements ConnectionFactory, Closeable {
     private final QueueDispatcher<JdbcPacket> adapter;
     private final Thread dispatcher;
     private final boolean shared;
+    private final Lock workerLock;
     private final AtomicReference<JdbcWorker> sharedWorker;
 
     JdbcConnectionFactory(ConnectionFactoryOptions options) {
@@ -25,12 +28,16 @@ public class JdbcConnectionFactory implements ConnectionFactory, Closeable {
         this.dispatcher = new Thread(this.adapter);
         this.shared = options.hasOption(JdbcConnectionFactoryProvider.SHARED);
         sharedWorker = new AtomicReference<>();
+        workerLock = new ReactiveLock();
     }
 
     private Mono<Void> initDispatcher() {
         return Mono.fromCallable(() -> {
             if (!dispatcher.isAlive()) {
-                dispatcher.start();
+                try {
+                    dispatcher.start();
+                } catch (IllegalThreadStateException ignored) {
+                }
             }
             return null;
         });
@@ -38,21 +45,22 @@ public class JdbcConnectionFactory implements ConnectionFactory, Closeable {
 
     @Override
     public Mono<JdbcConnection> create() {
-        try {
-            AtomicReference<JdbcConnection> connection = new AtomicReference<>(null);
-            sharedWorker.getAndUpdate(jdbcWorker -> {
-                if (jdbcWorker == null) {
-                    connection.set(new JdbcConnection(adapter, options));
-                    return connection.get().getWorker();
-                } else {
-                    connection.set(new JdbcConnection(jdbcWorker));
-                    return jdbcWorker;
-                }
-            });
-            return initDispatcher().then(connection.get().init());
-        } catch (Exception e) {
-            return Mono.error(e);
-        }
+        return initDispatcher()
+                .doOnTerminate(workerLock::lock)
+                .then(Mono.fromSupplier(() -> {
+                    JdbcWorker jdbcWorker = sharedWorker.get();
+                    if (!shared || jdbcWorker == null || !jdbcWorker.isAlive()) {
+                        JdbcConnection jdbcConnection = new JdbcConnection(adapter, options);
+                        if (shared) {
+                            sharedWorker.set(jdbcConnection.getWorker());
+                        }
+                        return jdbcConnection;
+                    } else {
+                        return new JdbcConnection(jdbcWorker);
+                    }
+                }))
+                .transform(workerLock::unlockOnTerminate)
+                .flatMap(JdbcConnection::init);
     }
 
     @Override
@@ -61,12 +69,15 @@ public class JdbcConnectionFactory implements ConnectionFactory, Closeable {
     }
 
     public Mono<Void> close() {
-        JdbcWorker worker = sharedWorker.getAndSet(null);
-        if (worker != null && shared) {
-            log.debug("Closing factory");
-            return worker.closeNow();
-        } else {
-            return Mono.empty();
-        }
+        return workerLock.lock()
+                .then(Mono.fromSupplier(sharedWorker::get))
+                .flatMap(worker -> {
+                    if (worker != null && shared) {
+                        log.debug("Closing factory");
+                        return worker.closeNow();
+                    } else {
+                        return Mono.empty();
+                    }
+                }).transform(workerLock::unlockOnTerminate);
     }
 }

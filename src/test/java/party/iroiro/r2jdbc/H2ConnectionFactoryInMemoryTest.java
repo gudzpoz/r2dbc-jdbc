@@ -45,7 +45,8 @@ final class H2ConnectionFactoryInMemoryTest {
     void retainsStateAfterRunningCommand() {
 
         JdbcConnectionFactory connectionFactory = new JdbcConnectionFactory(
-                ConnectionFactoryOptions.parse("r2dbc:r2jdbc:h2~mem:///" + UUID.randomUUID() + "?j2shared=1"));
+                ConnectionFactoryOptions.parse("r2dbc:r2jdbc:h2~mem:///" + UUID.randomUUID()
+                        + "?j2shared=1&j2wait=1000"));
 
         runCommand(connectionFactory, "CREATE TABLE lego (id INT);");
         runCommand(connectionFactory, "INSERT INTO lego VALUES(42);");
