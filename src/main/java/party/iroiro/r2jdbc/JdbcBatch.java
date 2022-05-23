@@ -34,6 +34,7 @@ public class JdbcBatch implements Batch {
         return conn.send(JdbcJob.Job.BATCH, this, packet -> {
             assert packet.data instanceof List;
             return (List<?>) packet.data;
-        }).flatMapMany(list -> Flux.fromStream(list.stream().map(data -> new JdbcResult(conn, data))));
+        }).flatMapMany(list -> Flux.fromStream(list.stream().map(
+                data -> new JdbcResult(conn, data, conn.getConverter()))));
     }
 }

@@ -7,6 +7,7 @@ import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.reactivestreams.Publisher;
+import party.iroiro.r2jdbc.codecs.Converter;
 import party.iroiro.r2jdbc.util.Pair;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -34,8 +35,10 @@ public class JdbcResult implements Result {
     private final int fetchSize;
     private final ArrayList<Predicate<Segment>> filters;
     private final Exception e;
+    private final Converter converter;
 
-    JdbcResult(JdbcConnection conn, Object data, int fetchSize) {
+    JdbcResult(JdbcConnection conn, Object data, int fetchSize, Converter converter) {
+        this.converter = converter;
         int[] finalUpdates;
         this.conn = conn;
         this.fetchSize = fetchSize;
@@ -67,8 +70,8 @@ public class JdbcResult implements Result {
         cleaner.register(this, new ResultSetCleaner(result, conn));
     }
 
-    public JdbcResult(JdbcConnection conn, Object data) {
-        this(conn, data, -1);
+    public JdbcResult(JdbcConnection conn, Object data, Converter converter) {
+        this(conn, data, -1, converter);
     }
 
     @Override
@@ -103,6 +106,7 @@ public class JdbcResult implements Result {
                                 assert item instanceof JdbcRow;
                                 JdbcRow row = (JdbcRow) item;
                                 row.setMetadata(metadata);
+                                row.setConverter(converter);
                                 sink.next(row);
                             }
                         })) {

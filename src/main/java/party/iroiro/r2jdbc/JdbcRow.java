@@ -3,6 +3,7 @@ package party.iroiro.r2jdbc;
 import io.r2dbc.spi.Result;
 import io.r2dbc.spi.Row;
 import lombok.Data;
+import party.iroiro.r2jdbc.codecs.Converter;
 
 import java.util.ArrayList;
 
@@ -10,6 +11,7 @@ import java.util.ArrayList;
 public class JdbcRow implements Row, Result.RowSegment {
     private final ArrayList<Object> rowData;
     private JdbcRowMetadata metadata;
+    private Converter converter;
 
     JdbcRow(ArrayList<Object> rowData) {
         this.rowData = rowData;
@@ -17,12 +19,20 @@ public class JdbcRow implements Row, Result.RowSegment {
 
     @Override
     public <T> T get(int index, Class<T> type) {
-        return type.cast(rowData.get(index));
+        if (converter == null) {
+            return type.cast(rowData.get(index));
+        } else {
+            return type.cast(converter.convert(rowData.get(index), type));
+        }
     }
 
     @Override
     public <T> T get(String name, Class<T> type) {
-        return type.cast(rowData.get(metadata.getColumnIndex(name)));
+        return get(metadata.getColumnIndex(name), type);
+    }
+
+    public void setConverter(Converter converter) {
+        this.converter = converter;
     }
 
     public String toString() {

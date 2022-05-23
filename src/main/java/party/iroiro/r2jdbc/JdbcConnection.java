@@ -1,10 +1,14 @@
 package party.iroiro.r2jdbc;
 
 import io.r2dbc.spi.*;
+import org.apache.commons.beanutils.ConstructorUtils;
 import org.reactivestreams.Publisher;
+import party.iroiro.r2jdbc.codecs.Converter;
+import party.iroiro.r2jdbc.codecs.DefaultConverter;
 import party.iroiro.r2jdbc.util.QueueDispatcher;
 import reactor.core.publisher.Mono;
 
+import java.lang.reflect.InvocationTargetException;
 import java.time.Duration;
 import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -18,18 +22,41 @@ public class JdbcConnection implements Connection {
     private final AtomicBoolean valid;
     private final AtomicReference<IsolationLevel> isolationLevel;
     private final JdbcWorker worker;
+    private final Converter converter;
 
-    JdbcConnection(JdbcWorker worker) {
+    JdbcConnection(JdbcWorker worker, ConnectionFactoryOptions options)
+            throws JdbcException {
         this.worker = worker;
 
         autoCommit = new AtomicBoolean(true);
         valid = new AtomicBoolean(true);
         isolationLevel = new AtomicReference<>();
         metadata = new AtomicReference<>();
+        try {
+            converter = getConverter(options);
+        } catch (ClassNotFoundException | InstantiationException
+                | IllegalAccessException | NoSuchMethodException | InvocationTargetException e) {
+            throw new JdbcException(e);
+        }
     }
 
     JdbcConnection(QueueDispatcher<JdbcPacket> adapter, ConnectionFactoryOptions options) {
-        this(new JdbcWorker(new LinkedBlockingDeque<>(), adapter.subQueue(), options));
+        this(new JdbcWorker(new LinkedBlockingDeque<>(), adapter.subQueue(), options), options);
+    }
+
+    private static Converter getConverter(ConnectionFactoryOptions options)
+            throws ClassNotFoundException, InvocationTargetException, NoSuchMethodException, IllegalAccessException, InstantiationException {
+        if (options.hasOption(JdbcConnectionFactoryProvider.CONV)) {
+            Class<?> aClass = Class.forName((String) options.getValue(JdbcConnectionFactoryProvider.CONV));
+
+            if (Converter.class.isAssignableFrom(aClass)) {
+                return (Converter) ConstructorUtils.invokeConstructor(aClass, null);
+            } else {
+                throw new ClassCastException(aClass.getName());
+            }
+        } else {
+            return new DefaultConverter();
+        }
     }
 
     Mono<JdbcConnection> init() {
@@ -168,5 +195,9 @@ public class JdbcConnection implements Connection {
 
     public JdbcWorker getWorker() {
         return worker;
+    }
+
+    public Converter getConverter() {
+        return converter;
     }
 }

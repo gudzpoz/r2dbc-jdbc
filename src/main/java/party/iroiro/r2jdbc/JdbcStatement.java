@@ -97,7 +97,7 @@ public class JdbcStatement implements Statement {
     @Override
     public Mono<JdbcResult> execute() {
         return conn.send(JdbcJob.Job.EXECUTE_STATEMENT, this,
-                packet -> new JdbcResult(conn, packet.data, size.get()));
+                packet -> new JdbcResult(conn, packet.data, size.get(), conn.getConverter()));
     }
 
     @Override

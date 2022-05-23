@@ -56,7 +56,7 @@ public class JdbcConnectionFactory implements ConnectionFactory, Closeable {
                         }
                         return jdbcConnection;
                     } else {
-                        return new JdbcConnection(jdbcWorker);
+                        return new JdbcConnection(jdbcWorker, options);
                     }
                 }))
                 .transform(workerLock::unlockOnTerminate)
