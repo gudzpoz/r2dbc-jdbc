@@ -1,6 +1,7 @@
 package party.iroiro.r2jdbc;
 
 import io.r2dbc.spi.*;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.beanutils.ConstructorUtils;
 import org.reactivestreams.Publisher;
 import party.iroiro.r2jdbc.codecs.Converter;
@@ -16,6 +17,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
 
+@Slf4j
 public class JdbcConnection implements Connection {
     private final AtomicReference<ConnectionMetadata> metadata;
     private final AtomicBoolean autoCommit;
@@ -95,6 +97,7 @@ public class JdbcConnection implements Connection {
 
     @Override
     public Mono<Void> close() {
+        valid.set(false);
         return worker.close();
     }
 
@@ -115,6 +118,10 @@ public class JdbcConnection implements Connection {
 
     @Override
     public JdbcStatement createStatement(String sql) {
+        //noinspection ConstantConditions
+        if (sql == null) {
+            throw new IllegalArgumentException("Null statement not allowed");
+        }
         return new JdbcStatement(sql, this);
     }
 

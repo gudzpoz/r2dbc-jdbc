@@ -12,6 +12,7 @@ import party.iroiro.r2jdbc.util.Pair;
 import party.iroiro.r2jdbc.util.QueueItem;
 import party.iroiro.r2jdbc.util.SingletonMono;
 import reactor.core.publisher.Mono;
+import reactor.util.annotation.Nullable;
 
 import java.lang.reflect.InvocationTargetException;
 import java.sql.*;
@@ -157,6 +158,10 @@ class JdbcWorker implements Runnable {
             }
             return;
         }
+        process(job);
+    }
+
+    private void process(JdbcJob job) throws InterruptedException {
         log.trace("Processing: {}", job.job);
         switch (job.job) {
             case INIT:
@@ -335,34 +340,39 @@ class JdbcWorker implements Runnable {
         log.trace("Process finished: {}", job.job);
     }
 
-    private Object execute(String sql, ArrayList<Map<Integer, Object>> bindings, String[] keys) throws SQLException {
+    private Object execute(String sql, @Nullable ArrayList<Map<Integer, Object>> bindings,
+                           String[] keys) throws SQLException {
         PreparedStatement s = getCachedOrPrepare(sql, keys);
-        if (bindings == null || bindings.size() == 1) {
-            if (bindings != null) {
-                bindStatement(s, bindings.get(0));
-            }
-            boolean isQuery = s.execute();
-            if (isQuery) {
-                ResultSet resultSet = s.getResultSet();
-                s.closeOnCompletion();
-                return resultSet;
-            } else {
-                int[] counts = new int[]{s.getUpdateCount()};
-                Pair pair = new Pair(counts, s.getGeneratedKeys());
-                s.closeOnCompletion();
-                return pair;
-            }
+        ArrayList<Object> results = new ArrayList<>(bindings == null ? 1 : bindings.size());
+        if (bindings == null) {
+            executeSingle(results, s, null);
         } else if (bindings.size() == 0) {
             s.close();
             throw new IllegalArgumentException("No valid statement");
         } else {
-            for (var map : bindings) {
-                bindStatement(s, map);
-                s.addBatch();
+            for (var binding : bindings) {
+                executeSingle(results, s, binding);
             }
-            int[] ints = s.executeBatch();
-            s.close();
-            return ints;
+        }
+        return results;
+    }
+
+    private void executeSingle(ArrayList<Object> results, PreparedStatement s, Map<Integer, Object> binding) throws SQLException {
+        if (binding != null) {
+            bindStatement(s, binding);
+        }
+        boolean isQuery = s.execute();
+        if (isQuery) {
+            do {
+                ResultSet resultSet = s.getResultSet();
+                results.add(resultSet);
+            } while (s.getMoreResults(Statement.KEEP_CURRENT_RESULT));
+            s.closeOnCompletion();
+        } else {
+            int[] counts = new int[]{s.getUpdateCount()};
+            Pair pair = new Pair(counts, s.getGeneratedKeys());
+            s.closeOnCompletion();
+            results.add(pair);
         }
     }
 
@@ -371,12 +381,17 @@ class JdbcWorker implements Runnable {
         if (keys == null) {
             statement = conn.prepareStatement(sql);
         } else {
-            statement = conn.prepareStatement(sql, keys);
+            if (keys.length == 0) {
+                statement = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS);
+            } else {
+                statement = conn.prepareStatement(sql, keys);
+            }
         }
         return statement;
     }
 
     private void bindStatement(PreparedStatement s, Map<Integer, Object> map) throws SQLException {
+        s.clearParameters();
         for (int i = 0; i < map.size(); i++) {
             s.setObject(i + 1, codec.encode(conn, map.getOrDefault(i, null)));
         }

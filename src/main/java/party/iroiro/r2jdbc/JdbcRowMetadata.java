@@ -2,7 +2,6 @@ package party.iroiro.r2jdbc;
 
 import io.r2dbc.spi.ColumnMetadata;
 import io.r2dbc.spi.RowMetadata;
-import lombok.extern.slf4j.Slf4j;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -26,7 +25,7 @@ public class JdbcRowMetadata implements RowMetadata {
                 return i;
             }
         }
-        return -1;
+        throw new NoSuchElementException(name);
     }
 
     @Override

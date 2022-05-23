@@ -1,6 +1,8 @@
 package party.iroiro.r2jdbc;
 
+import io.r2dbc.spi.Parameters;
 import io.r2dbc.spi.Statement;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.util.ArrayList;
@@ -16,29 +18,32 @@ import java.util.regex.Pattern;
  * Jdbc Statement wrapper with data processing on a worker thread
  *
  * <p>
- *     Note that named parameter binding has a very limited support, that is,
- *     it is matched with regex <code>(?:\s|^):(\w+)(?:\s|$)</code>, which may work
- *     in most <i>simple</i> cases.
+ * Note that named parameter binding has a very limited support, that is,
+ * it is matched with regex <code>(?:\s|^):(\w+)(?:\s|$)</code>, which may work
+ * in most <i>simple</i> cases.
  * </p>
  */
 public class JdbcStatement implements Statement {
     private static final Pattern NAMED_PARAMETER = Pattern.compile("(?:\\s|^):(\\w+)(?:\\s|$)");
+    final AtomicReference<String[]> wantsGenerated;
+    final String sql;
+    final ArrayList<Map<Integer, Mono<Object>>> rawBindings;
+    final ArrayList<Map<Integer, Object>> bindings;
     private final JdbcConnection conn;
     private final Map<String, Integer> indices;
     private final AtomicInteger size;
-    final AtomicReference<String[]> wantsGenerated;
-    final String sql;
-
-    final ArrayList<Map<Integer, Object>> bindings;
+    private final int maxParameterCount;
 
     JdbcStatement(String sql, JdbcConnection conn) {
         this.conn = conn;
         bindings = new ArrayList<>();
+        rawBindings = new ArrayList<>();
         add();
         indices = new HashMap<>();
         size = new AtomicInteger(-1);
         wantsGenerated = new AtomicReference<>(null);
         this.sql = simpleParse(sql);
+        maxParameterCount = (int) this.sql.chars().filter(i -> i == '?').count();
     }
 
     private String simpleParse(String sql) {
@@ -53,7 +58,7 @@ public class JdbcStatement implements Statement {
 
     @Override
     public Statement add() {
-        bindings.add(new HashMap<>());
+        rawBindings.add(new HashMap<>());
         return this;
     }
 
@@ -74,7 +79,13 @@ public class JdbcStatement implements Statement {
         if (value == null) {
             throw new IllegalArgumentException("value must not be null");
         }
-        bindings.get(bindings.size() - 1).put(index, value);
+        if (value instanceof Class) {
+            throw new IllegalArgumentException("probably no databases support this");
+        }
+        if (index >= maxParameterCount) {
+            throw new IndexOutOfBoundsException("non existent index");
+        }
+        rawBindings.get(rawBindings.size() - 1).put(index, conn.getConverter().convert(value));
         return this;
     }
 
@@ -85,7 +96,7 @@ public class JdbcStatement implements Statement {
 
     @Override
     public Statement bindNull(int index, Class<?> type) {
-        bindings.get(bindings.size() - 1).put(index, null);
+        rawBindings.get(rawBindings.size() - 1).put(index, Mono.just(Parameters.in(type)));
         return this;
     }
 
@@ -95,13 +106,38 @@ public class JdbcStatement implements Statement {
     }
 
     @Override
-    public Mono<JdbcResult> execute() {
-        return conn.send(JdbcJob.Job.EXECUTE_STATEMENT, this,
-                packet -> new JdbcResult(conn, packet.data, size.get(), conn.getConverter()));
+    public Flux<JdbcResult> execute() {
+        bindings.clear();
+        bindings.ensureCapacity(rawBindings.size());
+        ArrayList<Flux<Object>> fluxes = new ArrayList<>(rawBindings.size());
+        for (Map<Integer, Mono<Object>> rawBinding : rawBindings) {
+            final HashMap<Integer, Object> bind = new HashMap<>();
+            bindings.add(bind);
+            fluxes.add(Flux.fromIterable(rawBinding.entrySet())
+                    .flatMap(entry -> {
+                        Mono<Object> value = entry.getValue();
+                        if (value == null) {
+                            return Mono.empty();
+                        } else {
+                            return value.doOnNext(o -> bind.put(entry.getKey(), o));
+                        }
+                    }));
+        }
+        return Flux.merge(fluxes).thenMany(
+                conn.send(JdbcJob.Job.EXECUTE_STATEMENT,
+                        this,
+                        packet -> (ArrayList<?>) packet.data)
+                        .flatMapMany(list ->
+                                Flux.fromIterable(list)
+                                        .map(item -> new JdbcResult(conn, item, conn.getConverter()))));
     }
 
     @Override
     public Statement returnGeneratedValues(String... columns) {
+        //noinspection ConstantConditions
+        if (columns == null) {
+            throw new IllegalArgumentException();
+        }
         wantsGenerated.set(columns);
         return this;
     }

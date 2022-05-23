@@ -4,6 +4,10 @@ import io.r2dbc.spi.ConnectionFactoryOptions;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.Test;
 
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -30,5 +34,19 @@ public class JdbcUrlTest {
             ).getUrl();
             assertEquals(url, entry.getValue());
         }
+    }
+
+    @Test
+    public void jdbcTest() throws Exception {
+        Connection connection = DriverManager.getConnection("jdbc:h2:mem:what");
+        connection.prepareStatement("create table test (id integer)").execute();
+        connection.prepareStatement("insert into test values (100)").execute();
+        PreparedStatement preparedStatement = connection.prepareStatement("select id + 1 from test; select id - 1 from test");
+        log.info(": {}", preparedStatement.execute());
+        ResultSet resultSet = preparedStatement.getResultSet();
+        resultSet.next();
+        log.info(": {}", resultSet.getInt(1));
+        log.info(": {}", resultSet.next());
+        log.info(": {}", preparedStatement.getMoreResults());
     }
 }

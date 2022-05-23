@@ -1,14 +1,17 @@
 package party.iroiro.r2jdbc.codecs;
 
+import io.r2dbc.spi.Parameter;
+import reactor.util.annotation.Nullable;
+
 import java.io.IOException;
 import java.io.OutputStream;
 import java.math.BigDecimal;
 import java.nio.ByteBuffer;
 import java.nio.channels.Channels;
-import java.nio.charset.StandardCharsets;
 import java.sql.*;
 import java.time.*;
 import java.util.HashMap;
+import java.util.Objects;
 
 public class DefaultCodec implements Codec {
     private final HashMap<Integer, Class<?>> columnTypeGuesses;
@@ -39,9 +42,9 @@ public class DefaultCodec implements Codec {
         put(OffsetDateTime.class, Types.TIMESTAMP_WITH_TIMEZONE);
         put(Object.class, Types.JAVA_OBJECT, Types.OTHER);
         put(Object[].class, Types.ARRAY);
-        put(Clob.class, Types.CLOB);
-        put(NClob.class, Types.NCLOB);
-        put(Blob.class, Types.BLOB);
+        put(String.class, Types.CLOB);
+        put(String.class, Types.NCLOB);
+        put(ByteBuffer.class, Types.BLOB);
     }
 
     @Override
@@ -71,55 +74,69 @@ public class DefaultCodec implements Codec {
     }
 
     @Override
-    public Object decode(Object object, Class<?> tClass)
+    public Object decode(Object object, @Nullable Class<?> tClass)
             throws UnsupportedOperationException, SQLException {
-        if (io.r2dbc.spi.Clob.class.isAssignableFrom(tClass)) {
-            if (object instanceof Clob) {
-                try {
-                    byte[] bytes = ((Clob) object).getAsciiStream().readAllBytes();
-                    return new JdbcClob(new String(bytes));
-                } catch (IOException e) {
-                    throw new SQLException(e);
-                }
+        if (object instanceof Clob) {
+            byte[] bytes;
+            try {
+                bytes = ((Clob) object).getAsciiStream().readAllBytes();
+            } catch (IOException e) {
+                throw new SQLException(e);
+            }
+            String s = new String(bytes);
+            if (tClass == null || tClass.isAssignableFrom(String.class)) {
+                return s;
+            }
+            if (tClass.isAssignableFrom(io.r2dbc.spi.Clob.class)) {
+                return new JdbcClob(s);
             }
             throw new UnsupportedOperationException();
         }
-        if (io.r2dbc.spi.Blob.class.isAssignableFrom(tClass)) {
-            if (object instanceof Blob) {
-                try {
-                    byte[] bytes = ((Blob) object).getBinaryStream().readAllBytes();
-                    return new JdbcBlob(ByteBuffer.wrap(bytes));
-                } catch (IOException e) {
-                    throw new SQLException(e);
-                }
+
+        if (object instanceof Blob) {
+            byte[] bytes;
+            try {
+                bytes = ((Blob) object).getBinaryStream().readAllBytes();
+            } catch (IOException e) {
+                throw new SQLException(e);
+            }
+            ByteBuffer buffer = ByteBuffer.wrap(bytes);
+            if (tClass == null || tClass.isAssignableFrom(ByteBuffer.class)) {
+                return buffer;
+            }
+            if (io.r2dbc.spi.Blob.class.isAssignableFrom(tClass)) {
+                return new JdbcBlob(buffer);
             }
             throw new UnsupportedOperationException();
         }
+
         if (object instanceof byte[]) {
             return ByteBuffer.wrap((byte[]) object);
         }
+
         return object;
     }
 
     @Override
-    public <T> Object encode(Connection connection, T object)
+    @Nullable
+    public <T> Object encode(Connection connection, T o)
             throws UnsupportedOperationException, SQLException {
-        if (object instanceof JdbcClob) {
-            Clob clob = connection.createClob();
-            try {
-                OutputStream stream = clob.setAsciiStream(0);
-                stream.write(
-                        ((JdbcClob) object).getContent().getBytes(StandardCharsets.UTF_8)
-                );
-                stream.close();
-            } catch (IOException e) {
-                throw new SQLException(e);
+        Object object = Objects.requireNonNull(o);
+        if (object instanceof Parameter) {
+            Object parameter = ((Parameter) object).getValue();
+            if (parameter == null) {
+                return null;
+            } else {
+                return encode(connection, parameter);
             }
+        } else if (object instanceof JdbcClob) {
+            Clob clob = connection.createClob();
+            clob.setString(1, ((JdbcClob) object).getContent());
             return clob;
         } else if (object instanceof JdbcBlob) {
             Blob blob = connection.createBlob();
             try {
-                OutputStream outputStream = blob.setBinaryStream(0);
+                OutputStream outputStream = blob.setBinaryStream(1);
                 Channels.newChannel(outputStream).write(((JdbcBlob) object).getBuffer());
                 outputStream.close();
             } catch (IOException e) {

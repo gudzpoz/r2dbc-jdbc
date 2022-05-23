@@ -1,6 +1,9 @@
 package party.iroiro.r2jdbc;
 
-import io.r2dbc.spi.*;
+import io.r2dbc.spi.Connection;
+import io.r2dbc.spi.ConnectionFactories;
+import io.r2dbc.spi.Result;
+import io.r2dbc.spi.Statement;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.Test;
 import reactor.core.publisher.Flux;
@@ -20,7 +23,8 @@ public class JdbcStressTest {
     public void notBatchedStressTest() {
         final int count = 10000;
         final int threads = 8;
-        ConnectionFactory factory = ConnectionFactories.get("r2dbc:r2jdbc:h2~:////tmp/test");
+        JdbcConnectionFactory factory = (JdbcConnectionFactory)
+                ConnectionFactories.get("r2dbc:r2jdbc:h2~:////tmp/test");
         long start = System.nanoTime();
         Mono.from(factory.create())
                 .flatMap(this::init)
@@ -51,7 +55,8 @@ public class JdbcStressTest {
     public void batchedStressTest() {
         final int count = 10000;
         final int threads = 16;
-        ConnectionFactory factory = ConnectionFactories.get("r2dbc:r2jdbc:h2~:////tmp/test");
+        JdbcConnectionFactory factory = (JdbcConnectionFactory)
+                ConnectionFactories.get("r2dbc:r2jdbc:h2~:////tmp/test");
         long start = System.nanoTime();
         long now = Instant.now().toEpochMilli();
         Connection conn = Mono.from(factory.create())
@@ -106,10 +111,32 @@ public class JdbcStressTest {
                 Mono.from(result.getRowsUpdated()).map(l -> (int) (long) l));
     }
 
-    private Mono<Connection> init(Connection connection) {
+    private Mono<JdbcConnection> init(JdbcConnection connection) {
         return Mono.from(connection.createStatement("drop table if exists s_test").execute())
                 .thenMany(connection.createStatement("create table s_test" +
                         "(id bigint primary key, name varchar)").execute())
                 .last().thenReturn(connection);
+    }
+
+    @Test
+    void transactionTest() {
+        JdbcConnectionFactory factory = (JdbcConnectionFactory)
+                ConnectionFactories.get("r2dbc:r2jdbc:h2~:////tmp/test");
+        Mono.from(factory.create())
+                .flatMap(this::init)
+                .flatMapMany(connection -> connection.beginTransaction()
+                        .thenMany(Flux.defer(() -> {
+                            JdbcStatement statement = connection.createStatement("insert into s_test (id, name)" +
+                                    " values (1024, ?)");
+                            statement.bind(0, "Hello");
+                            Mono<Void> first = statement.execute().flatMap(JdbcResult::getRowsUpdated).then();
+
+                            JdbcStatement second = connection.createStatement("select * from s_test where id = ?");
+                            second.bind(0, 1024);
+                            Flux<JdbcResult> execute = second.execute();
+                            return Flux.merge(
+                                    first, execute, connection.commitTransaction()
+                            ).log();
+                        }))).blockLast();
     }
 }

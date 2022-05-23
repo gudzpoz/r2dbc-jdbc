@@ -25,7 +25,7 @@ public class JdbcColumnMetadata implements ColumnMetadata {
                 codec.converted(source),
                 metadata.getColumnTypeName(i)
         );
-        name = metadata.getColumnName(i);
+        name = metadata.getColumnLabel(i);
         precision = metadata.getPrecision(i);
         scale = metadata.getScale(i);
         nullability = metadata.isNullable(i);
