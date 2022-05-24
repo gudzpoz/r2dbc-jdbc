@@ -78,8 +78,7 @@ public class DefaultCodec implements Codec {
         if (object instanceof Clob) {
             byte[] bytes;
             try {
-                InputStream asciiStream = ((Clob) object).getAsciiStream();
-                bytes = getBytes(asciiStream);
+                bytes = ((Clob) object).getAsciiStream().readAllBytes();
             } catch (IOException e) {
                 throw new SQLException(e);
             }
@@ -89,7 +88,7 @@ public class DefaultCodec implements Codec {
         if (object instanceof Blob) {
             byte[] bytes;
             try {
-                bytes = getBytes(((Blob) object).getBinaryStream());
+                bytes = ((Blob) object).getBinaryStream().readAllBytes();
             } catch (IOException e) {
                 throw new SQLException(e);
             }
@@ -101,17 +100,6 @@ public class DefaultCodec implements Codec {
         }
 
         return object;
-    }
-
-    private byte[] getBytes(InputStream asciiStream) throws IOException {
-        byte[] bytes;
-        ByteArrayOutputStream output = new ByteArrayOutputStream();
-        byte[] buffer = new byte[4096];
-        for (int len = asciiStream.read(buffer); len != -1; len = asciiStream.read(buffer)) {
-            output.write(buffer, 0, len);
-        }
-        bytes = output.toByteArray();
-        return bytes;
     }
 
     @Override

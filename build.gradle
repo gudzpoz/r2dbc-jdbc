@@ -9,8 +9,8 @@ plugins {
 group 'party.iroiro'
 version '0.0.1-SNAPSHOT'
 
-sourceCompatibility = '1.8'
-targetCompatibility = '1.8'
+sourceCompatibility = '1.9'
+targetCompatibility = '1.9'
 
 repositories {
     mavenCentral()
@@ -52,6 +52,14 @@ test {
 java {
     withSourcesJar()
     withJavadocJar()
+}
+
+jar {
+    manifest {
+        attributes(
+                'R2DBC-Specification-Version': "$r2dbcSpiVersion"
+        )
+    }
 }
 
 apply from: 'jacoco.gradle'
