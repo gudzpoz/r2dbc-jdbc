@@ -1,7 +1,7 @@
 # Reactive Relational Database Connectivity JDBC Implementation
 
-![Maven Central](https://img.shields.io/maven-central/v/party.iroiro/r2dbc-jdbc?label=Maven)
-![Sonatype Nexus (Snapshots)](https://img.shields.io/nexus/s/party.iroiro/r2dbc-jdbc?server=https%3A%2F%2Fs01.oss.sonatype.org&label=Nexus)
+[![Maven Central](https://img.shields.io/maven-central/v/party.iroiro/r2dbc-jdbc?label=Maven%20Central&color=blue)](https://mvnrepository.com/artifact/party.iroiro/r2dbc-jdbc)
+![Sonatype Nexus (Snapshots)](https://img.shields.io/nexus/s/party.iroiro/r2dbc-jdbc?server=https%3A%2F%2Fs01.oss.sonatype.org&label=Nexus&color=pink)
 [![GitHub](https://img.shields.io/github/license/gudzpoz/r2dbc-jdbc?label=License)](./LICENSE)
 
 [![Build and Publish](https://github.com/gudzpoz/r2dbc-jdbc/actions/workflows/build.yml/badge.svg)](https://github.com/gudzpoz/r2dbc-jdbc/actions/workflows/build.yml)
@@ -9,6 +9,10 @@
 [![Code Coverage](https://img.shields.io/codecov/c/gh/gudzpoz/r2dbc-jdbc?label=Test%20Coverage)](https://app.codecov.io/gh/gudzpoz/r2dbc-jdbc)
 
 This project contains a simplistic [Java Database Connectivity (JDBC)](https://docs.oracle.com/javase/8/docs/technotes/guides/jdbc/) implementation of the [R2DBC SPI](https://github.com/r2dbc/r2dbc-spi). This implementation is not intended to be used directly, but rather to be used as the backing implementation for a humane client library.
+
+As for Spring Data, this library provides a `R2dbcDialectProvider`.
+You may simply set `spring.r2dbc.url` accordingly in your `application.yml/properties`
+and things should work out of the box.
 
 It requires Java 9.
 
@@ -41,6 +45,60 @@ For *big* databases like MariaDB or PostgreSQL, you might as well go to [Drivers
 ## Usage
 
 Just follow the guide on [R2DBC](https://r2dbc.io/).
+
+### From Maven Central
+
+[![Maven Central](https://img.shields.io/maven-central/v/party.iroiro/r2dbc-jdbc?label=Maven%20Central&color=blue)](https://mvnrepository.com/artifact/party.iroiro/r2dbc-jdbc)
+
+<details>
+<summary>Maven</summary>
+
+Using directly?
+
+```xml
+<dependency>
+  <groupId>party.iroiro</groupId>
+  <artifactId>r2dbc-jdbc</artifactId>
+  <version>0.1.0</version>
+</dependency>
+```
+
+Using with Spring Data:
+
+```xml
+<dependency>
+  <groupId>org.springframework.boot</groupId>
+  <artifactId>spring-boot-starter-data-r2dbc</artifactId>
+</dependency>
+<dependency>
+  <groupId>party.iroiro</groupId>
+  <artifactId>r2dbc-jdbc</artifactId>
+  <version>0.1.0</version>
+  <scope>runtime</scope>
+</dependency>
+```
+
+</details>
+
+<details>
+<summary>Gradle</summary>
+
+Using directly?
+
+```groovy
+implementation 'party.iroiro:r2dbc-jdbc:0.1.0'
+```
+
+Using with Spring Data:
+
+```groovy
+implementation 'org.springframework.boot:spring-boot-starter-data-r2dbc'
+runtimeOnly 'party.iroiro:r2dbc-jdbc:0.1.0'
+```
+
+</details>
+
+### Passing JDBC urls
 
 Note that you cannot pass a raw JDBC url directly. With R2DBC API, the call might look like this:
 

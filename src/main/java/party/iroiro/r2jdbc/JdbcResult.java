@@ -4,7 +4,6 @@ import io.r2dbc.spi.Result;
 import io.r2dbc.spi.Row;
 import io.r2dbc.spi.RowMetadata;
 import lombok.AllArgsConstructor;
-import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.reactivestreams.Publisher;
 import party.iroiro.r2jdbc.codecs.Converter;
@@ -175,7 +174,6 @@ public class JdbcResult implements Result {
     }
 
     @AllArgsConstructor
-    @Getter
     public static class JdbcResultRequest {
         final ResultSet result;
         final int count;
