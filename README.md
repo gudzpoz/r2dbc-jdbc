@@ -2,23 +2,26 @@
 
 This project contains a simplistic [Java Database Connectivity (JDBC)](https://docs.oracle.com/javase/8/docs/technotes/guides/jdbc/) implementation of the [R2DBC SPI](https://github.com/r2dbc/r2dbc-spi). This implementation is not intended to be used directly, but rather to be used as the backing implementation for a humane client library.
 
+It requires Java 9.
+
 ## Status
 
 It is a toy project, and I promise there will be bugs.
 
-Multiple connections sharing a single worker requires locking quite a lot, but I have not yet found a good way to handle locks across reactive callbacks. That means, yes, I *expect* bugs when connections create and close too quickly.
-
 ## Wait, what?
 
 ```text
-|------------|  Input Jobs (BlockingQueue<>)
-|            |  <--------------------------- Connection(s)
-| The worker |
-|            |  --------------------------->   Dispatcher
+JDBC Connection                                 Reactive
+     /|\                                         Access
+      |                                             |
+|------------|  Input Jobs (BlockingQueue<>)       \|/
+|    The     |  <--------------------------- Connection(s)
+|            |
+|  worker(s) |  --------------------------->   Dispatcher
 |------------|  (LinkedBlockingMultiQueue<>)        |
                            Output                   |
                                                    \|/
-             Executing callbacks in Schedulers.parallel()
+              Executing callbacks in Schedulers.parallel()
 ```
 
 ## Why?
@@ -61,9 +64,11 @@ We accept four extra options. All the four are optional.
 | `JdbcConnectionFactoryProvider.SHARED` | Multiple connection shares the same worker. <br>Default: **No** |
 | `JdbcConnectionFactoryProvider.WAIT` | If sharing workers, wait for WAIT (ms) interval for new connections before shutting down worker when all connections closes.<br>Default: **Do not wait. Shut down once all connection closes.** |
 | `JdbcConnectionFactoryProvider.FORWARD` | What R2DBC options to forward to JDBC (comma separated).<br>Default: **None** |
+| `JdbcConnectionFactoryProvider.CODEC` | Name of a class converting JDBC types into regular Java types (used by the worker).<br>Default: **Built-in** |
+| `JdbcConnectionFactoryProvider.CONV` | Name of a class converting between Java types.<br>Default: **Built-in** |
 
 ## License
 
 I am borrowing tests from [R2DBC H2](https://github.com/r2dbc/r2dbc-h2), which is licensed under [Apache License 2.0](https://github.com/r2dbc/r2dbc-h2/blob/main/LICENSE).
 
-You must wait until I decide on a license for this project.
+Licensed under the [Apache License Version 2.0](./LICENSE)
