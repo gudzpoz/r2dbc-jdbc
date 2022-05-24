@@ -58,8 +58,6 @@ public class DefaultCodec implements Codec {
     public Class<?> converted(Class<?> jdbcType) {
         if (Clob.class.isAssignableFrom(jdbcType)) {
             return JdbcClob.class;
-        } else if (NClob.class.isAssignableFrom(jdbcType)) {
-            return JdbcClob.class;
         } else if (Blob.class.isAssignableFrom(jdbcType)) {
             return JdbcBlob.class;
         } else if (byte[].class.equals(jdbcType)) {

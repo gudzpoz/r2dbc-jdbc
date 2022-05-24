@@ -6,6 +6,7 @@ import org.apache.commons.beanutils.ConversionException;
 import org.apache.commons.beanutils.ConvertUtilsBean;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import reactor.util.annotation.Nullable;
 
 import java.nio.ByteBuffer;
 import java.util.LinkedList;
@@ -35,6 +36,10 @@ public class DefaultConverter implements Converter {
             public <T> T convert(Class<T> type, Object value) {
                 if (value instanceof JdbcBlob) {
                     return type.cast(((JdbcBlob) value).getBuffer());
+                } else if (value instanceof ByteBuffer) {
+                    return type.cast(value);
+                } else if (value instanceof byte[]) {
+                    return type.cast(ByteBuffer.wrap((byte[]) value));
                 } else {
                     throw new ConversionException("Unable to encode value to ByteBuffer");
                 }
@@ -46,8 +51,10 @@ public class DefaultConverter implements Converter {
             public <T> T convert(Class<T> type, Object value) {
                 if (value instanceof String) {
                     return type.cast(new JdbcClob((String) value));
+                } else if (value instanceof Clob) {
+                    return type.cast(value);
                 } else {
-                    throw new ConversionException("Unable to encode value to ByteBuffer");
+                    throw new ConversionException("Unable to encode value to Clob");
                 }
             }
         }, Clob.class);
@@ -57,15 +64,19 @@ public class DefaultConverter implements Converter {
             public <T> T convert(Class<T> type, Object value) {
                 if (value instanceof ByteBuffer) {
                     return type.cast(new JdbcBlob((ByteBuffer) value));
+                } else if (value instanceof byte[]) {
+                    return type.cast(new JdbcBlob(ByteBuffer.wrap((byte[]) value)));
+                } else if (value instanceof Blob) {
+                    return type.cast(value);
                 } else {
-                    throw new ConversionException("Unable to encode value to ByteBuffer");
+                    throw new ConversionException("Unable to encode value to Blob");
                 }
             }
         }, Blob.class);
     }
 
     @Override
-    public Object decode(Object object, Class<?> target) throws UnsupportedOperationException {
+    public Object decode(@Nullable Object object, Class<?> target) throws UnsupportedOperationException {
         try {
             return converter.convert(object, target);
         } catch (ConversionException e) {
@@ -74,7 +85,7 @@ public class DefaultConverter implements Converter {
     }
 
     @Override
-    public Mono<Object> encode(Object value) {
+    public Mono<Object> encode(@Nullable Object value) {
         if (value instanceof Clob) {
             if (value instanceof JdbcClob) {
                 return Mono.just(value);

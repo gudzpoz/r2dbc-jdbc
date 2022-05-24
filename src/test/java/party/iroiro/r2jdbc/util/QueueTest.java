@@ -39,4 +39,22 @@ public class QueueTest {
             e.printStackTrace();
         }
     }
+
+    @Test
+    public void interruptToQuit() {
+        QueueDispatcher<Integer> dispatcher = new QueueDispatcher<>(
+                new LinkedBlockingMultiQueue<>()
+        );
+        Thread thread = new Thread(dispatcher);
+        thread.start();
+        try {
+            Thread.sleep(1);
+        } catch (InterruptedException ignored) {
+        }
+        thread.interrupt();
+        try {
+            thread.join();
+        } catch (InterruptedException ignored) {
+        }
+    }
 }

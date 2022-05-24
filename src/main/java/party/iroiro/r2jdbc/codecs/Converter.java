@@ -1,6 +1,7 @@
 package party.iroiro.r2jdbc.codecs;
 
 import reactor.core.publisher.Mono;
+import reactor.util.annotation.Nullable;
 
 /**
  * Conversions that happen on the reactive side
@@ -18,7 +19,7 @@ public interface Converter {
      * @return converted object
      * @throws UnsupportedOperationException when not supported
      */
-    Object decode(Object object, Class<?> target) throws UnsupportedOperationException;
+    Object decode(@Nullable Object object, Class<?> target) throws UnsupportedOperationException;
 
     /**
      * Converts things
@@ -36,5 +37,5 @@ public interface Converter {
      * @param value the
      * @return the value to be passed to the worker
      */
-    Mono<Object> encode(Object value);
+    Mono<Object> encode(@Nullable Object value);
 }
