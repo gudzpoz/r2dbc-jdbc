@@ -6,6 +6,7 @@ import io.r2dbc.spi.RowMetadata;
 import party.iroiro.r2jdbc.codecs.Converter;
 
 import java.util.ArrayList;
+import java.util.NoSuchElementException;
 
 public class JdbcRow implements Row, Result.RowSegment {
     private final ArrayList<Object> rowData;
@@ -27,25 +28,16 @@ public class JdbcRow implements Row, Result.RowSegment {
 
     @Override
     public <T> T get(String name, Class<T> type) {
-        return get(metadata.getColumnIndex(name), type);
+        int columnIndex = metadata.getColumnIndex(name);
+        if (columnIndex == -1) {
+            throw new NoSuchElementException(name);
+        } else {
+            return get(columnIndex, type);
+        }
     }
 
     public void setConverter(Converter converter) {
         this.converter = converter;
-    }
-
-    public String toString() {
-        StringBuilder builder = new StringBuilder("[\n");
-        for (Object object : rowData) {
-            builder
-                    .append("  ")
-                    .append(object.getClass().getName())
-                    .append(": ")
-                    .append(object)
-                    .append(",\n");
-        }
-        builder.append("]");
-        return builder.toString();
     }
 
     @Override

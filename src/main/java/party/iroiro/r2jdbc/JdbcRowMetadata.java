@@ -27,7 +27,7 @@ public class JdbcRowMetadata implements RowMetadata {
                 return i;
             }
         }
-        throw new NoSuchElementException(name);
+        return -1;
     }
 
     @Override
@@ -48,11 +48,6 @@ public class JdbcRowMetadata implements RowMetadata {
     @Override
     public Collection<String> getColumnNames() {
         return columns.stream().map(JdbcColumnMetadata::getName).collect(Collectors.toList());
-    }
-
-    @Override
-    public String toString() {
-        return columns.toString();
     }
 
     @Override

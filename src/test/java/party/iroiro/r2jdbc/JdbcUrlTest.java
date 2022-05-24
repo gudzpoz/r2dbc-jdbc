@@ -49,4 +49,16 @@ public class JdbcUrlTest {
         log.info(": {}", resultSet.next());
         log.info(": {}", preparedStatement.getMoreResults());
     }
+
+    @Test
+    public void parameterTest() {
+        String url = JdbcConnectionFactoryProvider.getJdbcConnectionUrl(
+                ConnectionFactoryOptions.parse("r2dbc:r2jdbc:h2~mem:///~~~.~a~ctest")
+                        .mutate()
+                        .option(ConnectionFactoryOptions.USER, "sa")
+                        .option(ConnectionFactoryOptions.PASSWORD, "sa")
+                        .build()
+        ).getUrl();
+        assertEquals("jdbc:h2:mem:~/@ctest", url);
+    }
 }

@@ -7,9 +7,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class JdbcBatch implements Batch {
-    private final JdbcConnection conn;
-
     final ArrayList<String> sql;
+    private final JdbcConnection conn;
 
     JdbcBatch(JdbcConnection conn) {
         if (conn == null) {
@@ -31,10 +30,8 @@ public class JdbcBatch implements Batch {
 
     @Override
     public Flux<JdbcResult> execute() {
-        return conn.send(JdbcJob.Job.BATCH, this, packet -> {
-            assert packet.data instanceof List;
-            return (List<?>) packet.data;
-        }).flatMapMany(list -> Flux.fromStream(list.stream().map(
-                data -> new JdbcResult(conn, data, conn.getConverter()))));
+        return conn.send(JdbcJob.Job.BATCH, this, packet -> (List<?>) packet.data)
+                .flatMapMany(list -> Flux.fromStream(list.stream().map(
+                        data -> new JdbcResult(conn, data, conn.getConverter()))));
     }
 }
