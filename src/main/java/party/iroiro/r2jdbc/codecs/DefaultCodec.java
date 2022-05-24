@@ -12,6 +12,9 @@ import java.time.*;
 import java.util.HashMap;
 import java.util.Objects;
 
+/**
+ * A default {@link Codec} with {@link Blob} and {@link Clob} conversions
+ */
 public class DefaultCodec implements Codec {
     private final HashMap<Integer, Class<?>> columnTypeGuesses;
 

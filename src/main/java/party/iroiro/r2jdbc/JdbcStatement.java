@@ -85,7 +85,7 @@ public class JdbcStatement implements Statement {
         if (index >= maxParameterCount) {
             throw new IndexOutOfBoundsException("non existent index");
         }
-        rawBindings.get(rawBindings.size() - 1).put(index, conn.getConverter().convert(value));
+        rawBindings.get(rawBindings.size() - 1).put(index, conn.getConverter().encode(value));
         return this;
     }
 

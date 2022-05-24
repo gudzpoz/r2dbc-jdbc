@@ -21,7 +21,7 @@ public class JdbcRow implements Row, Result.RowSegment {
         if (converter == null) {
             return type.cast(rowData.get(index));
         } else {
-            return type.cast(converter.convert(rowData.get(index), type));
+            return type.cast(converter.decode(rowData.get(index), type));
         }
     }
 

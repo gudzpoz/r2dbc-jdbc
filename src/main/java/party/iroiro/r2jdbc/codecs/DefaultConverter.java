@@ -10,6 +10,9 @@ import reactor.core.publisher.Mono;
 import java.nio.ByteBuffer;
 import java.util.LinkedList;
 
+/**
+ * A default {@link Converter} using {@link ConvertUtilsBean} with custom converters to wrap {@link Clob} and {@link Blob}
+ */
 public class DefaultConverter implements Converter {
     protected final ConvertUtilsBean converter;
 
@@ -33,7 +36,7 @@ public class DefaultConverter implements Converter {
                 if (value instanceof JdbcBlob) {
                     return type.cast(((JdbcBlob) value).getBuffer());
                 } else {
-                    throw new ConversionException("Unable to convert value to ByteBuffer");
+                    throw new ConversionException("Unable to encode value to ByteBuffer");
                 }
             }
         }, ByteBuffer.class);
@@ -44,7 +47,7 @@ public class DefaultConverter implements Converter {
                 if (value instanceof String) {
                     return type.cast(new JdbcClob((String) value));
                 } else {
-                    throw new ConversionException("Unable to convert value to ByteBuffer");
+                    throw new ConversionException("Unable to encode value to ByteBuffer");
                 }
             }
         }, Clob.class);
@@ -55,14 +58,14 @@ public class DefaultConverter implements Converter {
                 if (value instanceof ByteBuffer) {
                     return type.cast(new JdbcBlob((ByteBuffer) value));
                 } else {
-                    throw new ConversionException("Unable to convert value to ByteBuffer");
+                    throw new ConversionException("Unable to encode value to ByteBuffer");
                 }
             }
         }, Blob.class);
     }
 
     @Override
-    public Object convert(Object object, Class<?> target) throws UnsupportedOperationException {
+    public Object decode(Object object, Class<?> target) throws UnsupportedOperationException {
         try {
             return converter.convert(object, target);
         } catch (ConversionException e) {
@@ -71,7 +74,7 @@ public class DefaultConverter implements Converter {
     }
 
     @Override
-    public Mono<Object> convert(Object value) {
+    public Mono<Object> encode(Object value) {
         if (value instanceof Clob) {
             if (value instanceof JdbcClob) {
                 return Mono.just(value);

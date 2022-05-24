@@ -66,14 +66,60 @@ class Main {
 
 We accept four extra options. All the four are optional. 
 
-| Option | Explained | 
-| -------- | --------- |
-| `JdbcConnectionFactoryProvider.URL` | Used directly as JDBC url<br>Default: **Deduce from R2DBC url** |
-| `JdbcConnectionFactoryProvider.SHARED` | Multiple connection shares the same worker. <br>Default: **No** |
-| `JdbcConnectionFactoryProvider.WAIT` | If sharing workers, wait for WAIT (ms) interval for new connections before shutting down worker when all connections closes.<br>Default: **Do not wait. Shut down once all connection closes.** |
-| `JdbcConnectionFactoryProvider.FORWARD` | What R2DBC options to forward to JDBC (comma separated).<br>Default: **None** |
-| `JdbcConnectionFactoryProvider.CODEC` | Name of a class converting JDBC types into regular Java types (used by the worker).<br>Default: **Built-in** |
-| `JdbcConnectionFactoryProvider.CONV` | Name of a class converting between Java types.<br>Default: **Built-in** |
+<table>
+<tr><th>Option</th><th>Explained</th></tr>
+<tr><td>
+
+`JdbcConnectionFactoryProvider.URL`
+
+Example: `r2dbc:r2jdbc:h2:///?j2url=jdbc:h2:mem:test`</td>
+<td>Used directly as JDBC url
+
+Default: **Deduce from R2DBC url**</td>
+</tr><tr><td>
+
+`JdbcConnectionFactoryProvider.SHARED`
+
+Example: `r2dbc:r2jdbc:h2~mem:///test?j2shared=true`</td>
+<td>Multiple connection shares the same worker.
+
+Default: **No**</td>
+</tr><tr><td>
+
+`JdbcConnectionFactoryProvider.WAIT`
+
+Example: `r2dbc:r2jdbc:h2~mem:///test?j2wait=-1`</td>
+<td>If sharing workers, wait for WAIT (ms) interval for new connections before shutting down worker when all connections closes. If negative, the JDBC connection is only closed after closing the factory.
+
+Default: **Do not wait. Shut down once all connection closes.**</td>
+</tr><tr><td>
+
+`JdbcConnectionFactoryProvider.FORWARD`
+
+Example: `r2dbc:r2jdbc:h2:///test?CIPHER=AES&j2forward=CIPHER`</td>
+<td>What R2DBC options to forward to JDBC (comma separated).
+
+Default: **None**</td>
+</tr><tr><td>
+
+`JdbcConnectionFactoryProvider.CODEC`
+
+Example: `r2dbc:r2jdbc:h2:///test?j2codec=party.iroiro.r2jdbc.codecs.DefaultCodec`</td>
+<td>Name of a class converting JDBC types into regular Java types (used by the worker).
+
+Default: **Built-in**</td>
+</tr><tr>
+<td>
+
+`JdbcConnectionFactoryProvider.CONV`
+
+
+Example: `r2dbc:r2jdbc:h2:///test?j2conv=party.iroiro.r2jdbc.codecs.DefaultConverter`</td>
+<td>Name of a class converting between Java types.
+
+Default: **Built-in**</td>
+</tr>
+</table>
 
 ## License
 

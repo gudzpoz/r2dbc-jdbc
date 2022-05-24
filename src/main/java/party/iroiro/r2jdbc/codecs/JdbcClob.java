@@ -5,6 +5,9 @@ import lombok.AllArgsConstructor;
 import org.reactivestreams.Publisher;
 import reactor.core.publisher.Mono;
 
+/**
+ * Thin wrapper around {@link String} to serve a {@link Clob} interface
+ */
 @AllArgsConstructor
 public class JdbcClob implements Clob {
     private final String content;

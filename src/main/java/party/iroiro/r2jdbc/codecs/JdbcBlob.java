@@ -7,6 +7,9 @@ import reactor.core.publisher.Mono;
 
 import java.nio.ByteBuffer;
 
+/**
+ * Thin wrapper around {@link ByteBuffer} to serve {@link Blob} interface
+ */
 @AllArgsConstructor
 public class JdbcBlob implements Blob {
     private final ByteBuffer buffer;

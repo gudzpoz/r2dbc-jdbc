@@ -145,7 +145,7 @@ class JdbcWorker implements Runnable {
     }
 
     private void takeAndProcess() throws InterruptedException {
-        JdbcJob job = pollDuration.isZero() ?
+        JdbcJob job = (pollDuration.isZero() || pollDuration.isNegative()) ?
                 jobs.take() : jobs.poll(pollDuration.toMillis(), TimeUnit.MILLISECONDS);
         if (job == null) {
             synchronized (this) {

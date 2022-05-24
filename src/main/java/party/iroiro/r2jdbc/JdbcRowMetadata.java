@@ -54,4 +54,9 @@ public class JdbcRowMetadata implements RowMetadata {
     public String toString() {
         return columns.toString();
     }
+
+    @Override
+    public boolean contains(String columnName) {
+        return getColumnIndex(columnName) >= 0;
+    }
 }
