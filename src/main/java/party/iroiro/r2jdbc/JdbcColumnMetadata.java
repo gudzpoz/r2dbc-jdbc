@@ -4,13 +4,11 @@ import io.r2dbc.spi.ColumnMetadata;
 import io.r2dbc.spi.Nullability;
 import io.r2dbc.spi.Type;
 import lombok.AllArgsConstructor;
-import lombok.Data;
 import party.iroiro.r2jdbc.codecs.Codec;
 
 import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
 
-@Data
 public class JdbcColumnMetadata implements ColumnMetadata {
     private final int precision;
     private final Type type;
@@ -37,6 +35,16 @@ public class JdbcColumnMetadata implements ColumnMetadata {
     }
 
     @Override
+    public Type getType() {
+        return type;
+    }
+
+    @Override
+    public String getName() {
+        return name;
+    }
+
+    @Override
     public Integer getPrecision() {
         return precision;
     }
@@ -60,13 +68,22 @@ public class JdbcColumnMetadata implements ColumnMetadata {
 
     @Override
     public Object getNativeTypeMetadata() {
-        return ColumnMetadata.super.getNativeTypeMetadata();
+        return source;
     }
 
     @AllArgsConstructor
-    @Data
     public static class JdbcColumnType implements Type {
-        private Class<?> javaType;
-        private String name;
+        private final Class<?> javaType;
+        private final String name;
+
+        @Override
+        public Class<?> getJavaType() {
+            return javaType;
+        }
+
+        @Override
+        public String getName() {
+            return name;
+        }
     }
 }

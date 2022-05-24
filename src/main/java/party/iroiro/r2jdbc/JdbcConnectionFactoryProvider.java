@@ -2,7 +2,6 @@ package party.iroiro.r2jdbc;
 
 import io.r2dbc.spi.*;
 import lombok.AllArgsConstructor;
-import lombok.Data;
 import party.iroiro.r2jdbc.util.StringEscape;
 
 import java.util.Properties;
@@ -155,9 +154,16 @@ public class JdbcConnectionFactoryProvider implements ConnectionFactoryProvider 
     }
 
     @AllArgsConstructor
-    @Data
     public static class JdbcConnectionDetails {
         private final Properties properties;
         private final String url;
+
+        public Properties getProperties() {
+            return properties;
+        }
+
+        public String getUrl() {
+            return url;
+        }
     }
 }

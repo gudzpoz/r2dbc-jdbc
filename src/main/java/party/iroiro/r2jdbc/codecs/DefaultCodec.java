@@ -3,8 +3,7 @@ package party.iroiro.r2jdbc.codecs;
 import io.r2dbc.spi.Parameter;
 import reactor.util.annotation.Nullable;
 
-import java.io.IOException;
-import java.io.OutputStream;
+import java.io.*;
 import java.math.BigDecimal;
 import java.nio.ByteBuffer;
 import java.nio.channels.Channels;
@@ -42,9 +41,9 @@ public class DefaultCodec implements Codec {
         put(OffsetDateTime.class, Types.TIMESTAMP_WITH_TIMEZONE);
         put(Object.class, Types.JAVA_OBJECT, Types.OTHER);
         put(Object[].class, Types.ARRAY);
-        put(String.class, Types.CLOB);
-        put(String.class, Types.NCLOB);
-        put(ByteBuffer.class, Types.BLOB);
+        put(Clob.class, Types.CLOB);
+        put(Clob.class, Types.NCLOB);
+        put(Blob.class, Types.BLOB);
     }
 
     @Override
@@ -79,35 +78,22 @@ public class DefaultCodec implements Codec {
         if (object instanceof Clob) {
             byte[] bytes;
             try {
-                bytes = ((Clob) object).getAsciiStream().readAllBytes();
+                InputStream asciiStream = ((Clob) object).getAsciiStream();
+                bytes = getBytes(asciiStream);
             } catch (IOException e) {
                 throw new SQLException(e);
             }
-            String s = new String(bytes);
-            if (tClass == null || tClass.isAssignableFrom(String.class)) {
-                return s;
-            }
-            if (tClass.isAssignableFrom(io.r2dbc.spi.Clob.class)) {
-                return new JdbcClob(s);
-            }
-            throw new UnsupportedOperationException();
+            return new String(bytes);
         }
 
         if (object instanceof Blob) {
             byte[] bytes;
             try {
-                bytes = ((Blob) object).getBinaryStream().readAllBytes();
+                bytes = getBytes(((Blob) object).getBinaryStream());
             } catch (IOException e) {
                 throw new SQLException(e);
             }
-            ByteBuffer buffer = ByteBuffer.wrap(bytes);
-            if (tClass == null || tClass.isAssignableFrom(ByteBuffer.class)) {
-                return buffer;
-            }
-            if (io.r2dbc.spi.Blob.class.isAssignableFrom(tClass)) {
-                return new JdbcBlob(buffer);
-            }
-            throw new UnsupportedOperationException();
+            return ByteBuffer.wrap(bytes);
         }
 
         if (object instanceof byte[]) {
@@ -115,6 +101,17 @@ public class DefaultCodec implements Codec {
         }
 
         return object;
+    }
+
+    private byte[] getBytes(InputStream asciiStream) throws IOException {
+        byte[] bytes;
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        byte[] buffer = new byte[4096];
+        for (int len = asciiStream.read(buffer); len != -1; len = asciiStream.read(buffer)) {
+            output.write(buffer, 0, len);
+        }
+        bytes = output.toByteArray();
+        return bytes;
     }
 
     @Override

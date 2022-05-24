@@ -2,12 +2,11 @@ package party.iroiro.r2jdbc;
 
 import io.r2dbc.spi.Result;
 import io.r2dbc.spi.Row;
-import lombok.Data;
+import io.r2dbc.spi.RowMetadata;
 import party.iroiro.r2jdbc.codecs.Converter;
 
 import java.util.ArrayList;
 
-@Data
 public class JdbcRow implements Row, Result.RowSegment {
     private final ArrayList<Object> rowData;
     private JdbcRowMetadata metadata;
@@ -52,5 +51,14 @@ public class JdbcRow implements Row, Result.RowSegment {
     @Override
     public Row row() {
         return this;
+    }
+
+    @Override
+    public RowMetadata getMetadata() {
+        return metadata;
+    }
+
+    public void setMetadata(JdbcRowMetadata metadata) {
+        this.metadata = metadata;
     }
 }

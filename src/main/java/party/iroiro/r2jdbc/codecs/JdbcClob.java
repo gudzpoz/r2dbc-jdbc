@@ -2,12 +2,10 @@ package party.iroiro.r2jdbc.codecs;
 
 import io.r2dbc.spi.Clob;
 import lombok.AllArgsConstructor;
-import lombok.Data;
 import org.reactivestreams.Publisher;
 import reactor.core.publisher.Mono;
 
 @AllArgsConstructor
-@Data
 public class JdbcClob implements Clob {
     private final String content;
 
@@ -19,5 +17,9 @@ public class JdbcClob implements Clob {
     @Override
     public Publisher<Void> discard() {
         return Mono.empty();
+    }
+
+    public String getContent() {
+        return content;
     }
 }
