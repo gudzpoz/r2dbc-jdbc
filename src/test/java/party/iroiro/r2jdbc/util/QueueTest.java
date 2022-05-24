@@ -13,7 +13,7 @@ public class QueueTest {
         QueueDispatcher<JdbcPacket> adapter = new QueueDispatcher<>(new LinkedBlockingMultiQueue<>());
         Thread dispatcher = new Thread(adapter);
         dispatcher.start();
-        var sub = adapter.subQueue();
+        LinkedBlockingMultiQueue<Integer, QueueItem<JdbcPacket>>.SubQueue sub = adapter.subQueue();
         BiConsumer<JdbcPacket, Exception> consumer =
                 (p, e) -> System.out.println(Thread.currentThread().getName() + " " + e.getMessage());
         new Thread(() -> {

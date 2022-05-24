@@ -192,12 +192,14 @@ public class JdbcConnection implements Connection {
 
     @Override
     public Mono<Boolean> validate(ValidationDepth depth) {
-        boolean v = valid.get();
-        if (depth == ValidationDepth.LOCAL || !v) {
-            return Mono.just(v);
-        } else {
-            return send(JdbcJob.Job.VALIDATE, null, packet -> (Boolean) packet.data);
-        }
+        return Mono.fromSupplier(valid::get)
+                .flatMap(v -> {
+                    if (v && depth == ValidationDepth.REMOTE) {
+                        return send(JdbcJob.Job.VALIDATE, null, packet -> (Boolean) packet.data);
+                    } else {
+                        return Mono.just(v);
+                    }
+                });
     }
 
     public JdbcWorker getWorker() {

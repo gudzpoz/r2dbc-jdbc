@@ -350,7 +350,7 @@ class JdbcWorker implements Runnable {
             s.close();
             throw new IllegalArgumentException("No valid statement");
         } else {
-            for (var binding : bindings) {
+            for (Map<Integer, Object> binding : bindings) {
                 executeSingle(results, s, binding);
             }
         }

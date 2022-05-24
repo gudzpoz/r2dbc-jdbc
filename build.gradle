@@ -1,32 +1,46 @@
 plugins {
     id 'java'
+    id 'java-library'
+    id 'maven-publish'
+    id 'signing'
+    id 'jacoco'
 }
 
 group 'party.iroiro'
 version '0.0.1-SNAPSHOT'
 
+sourceCompatibility = '1.8'
+targetCompatibility = '1.8'
+
 repositories {
     mavenCentral()
 }
 
+ext {
+    r2dbcSpiVersion = '1.0.0.RELEASE'
+    reactorVersion = '3.4.18'
+    slf4jVersion = '1.7.36'
+    lombokVersion = '1.18.24'
+}
+
 dependencies {
-    implementation 'io.r2dbc:r2dbc-spi:1.0.0.RELEASE'
-    implementation 'io.projectreactor:reactor-core:3.4.18'
+    implementation "io.r2dbc:r2dbc-spi:$r2dbcSpiVersion"
+    implementation "io.projectreactor:reactor-core:$reactorVersion"
     implementation 'party.iroiro:reactor-locks:0.4.0'
     implementation 'com.github.marianobarrios:linked-blocking-multi-queue:0.4.0'
     implementation 'commons-beanutils:commons-beanutils:1.9.4'
-    implementation 'org.slf4j:slf4j-api:1.7.36'
-    compileOnly 'org.projectlombok:lombok:1.18.24'
-    annotationProcessor 'org.projectlombok:lombok:1.18.24'
-    testCompileOnly 'org.projectlombok:lombok:1.18.24'
-    testAnnotationProcessor 'org.projectlombok:lombok:1.18.24'
-    testImplementation 'io.projectreactor:reactor-test:3.4.18'
-    testImplementation 'io.r2dbc:r2dbc-spi-test:1.0.0.RELEASE'
+    implementation "org.slf4j:slf4j-api:$slf4jVersion"
+    compileOnly "org.projectlombok:lombok:$lombokVersion"
+    annotationProcessor "org.projectlombok:lombok:$lombokVersion"
+    testCompileOnly "org.projectlombok:lombok:$lombokVersion"
+    testAnnotationProcessor "org.projectlombok:lombok:$lombokVersion"
+    testImplementation "io.projectreactor:reactor-test:$reactorVersion"
+    testImplementation "io.r2dbc:r2dbc-spi-test:$r2dbcSpiVersion"
     testImplementation 'com.h2database:h2:2.1.212'
     testImplementation 'org.junit.jupiter:junit-jupiter-api:5.7.0'
     testImplementation 'org.assertj:assertj-core:3.22.0'
     testImplementation 'org.mockito:mockito-core:4.5.1'
-    testImplementation 'org.slf4j:slf4j-simple:1.7.36'
+    testImplementation "org.slf4j:slf4j-simple:$slf4jVersion"
     testImplementation 'org.springframework.boot:spring-boot-starter-jdbc:2.3.12.RELEASE'
     testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.7.0'
 }
@@ -34,3 +48,12 @@ dependencies {
 test {
     useJUnitPlatform()
 }
+
+java {
+    withSourcesJar()
+    withJavadocJar()
+}
+
+apply from: 'jacoco.gradle'
+apply from: 'javadoc.gradle'
+apply from: 'publish.gradle'
