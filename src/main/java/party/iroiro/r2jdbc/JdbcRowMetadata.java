@@ -4,8 +4,10 @@ import io.r2dbc.spi.ColumnMetadata;
 import io.r2dbc.spi.RowMetadata;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.NoSuchElementException;
+import java.util.stream.Collectors;
 
 public class JdbcRowMetadata implements RowMetadata {
     private final ArrayList<JdbcColumnMetadata> columns;
@@ -41,6 +43,11 @@ public class JdbcRowMetadata implements RowMetadata {
     @Override
     public List<? extends ColumnMetadata> getColumnMetadatas() {
         return columns;
+    }
+
+    @Override
+    public Collection<String> getColumnNames() {
+        return columns.stream().map(JdbcColumnMetadata::getName).collect(Collectors.toList());
     }
 
     @Override

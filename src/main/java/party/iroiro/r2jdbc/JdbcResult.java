@@ -75,11 +75,11 @@ public class JdbcResult implements Result {
     }
 
     @Override
-    public Publisher<Long> getRowsUpdated() {
+    public Flux<Integer> getRowsUpdated() {
         if (updated == null) {
             return Flux.empty();
         } else {
-            return Flux.fromStream(Arrays.stream(updated).asLongStream().boxed());
+            return Flux.fromStream(Arrays.stream(updated).boxed());
         }
     }
 
