@@ -9,6 +9,7 @@ public interface Codec extends Encoder, Decoder {
      * @param row the row metadata
      * @param column column index (starts from 1, as is in JDBC)
      * @return the guessed type
+     * @throws SQLException when errors occur
      */
     Class<?> guess(ResultSetMetaData row, int column) throws SQLException;
 

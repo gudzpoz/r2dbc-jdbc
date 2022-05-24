@@ -24,13 +24,14 @@ public class JdbcConnectionFactoryProvider implements ConnectionFactoryProvider 
      * </p>
      * <p>
      * Note that we use <code>~</code> to escape (I mean it) characters in HOST and PATH:
-     * <pre><code>
-     * ~~ --> ~
-     * ~: --> /
-     * </code></pre>
      * </p>
+     * <pre><code>
+     * ~~ --&gt; ~
+     * ~: --&gt; /
+     * </code></pre>
      * <p>
      * Several examples:
+     * </p>
      * <pre><code>
      *         r2dbc:r2jdbc:h2~tcp://~:~:localhost:8080/test
      *           1  |   2  | 3| 4 |       5       | 6  | 7
@@ -44,11 +45,11 @@ public class JdbcConnectionFactoryProvider implements ConnectionFactoryProvider 
      *         Then the encoded url:
      *         jdbc:{$3}:{$4}:{$5}:{$6}/{$7}
      *         jdbc:h2:tcp://localhost:8080/test
-     *         </code></pre>
-     * </p>
+     * </code></pre>
      * <p>
      * Some more examples (copied from tests, the R2DBC url keys corresponds to
      * the JDBC values):
+     * </p>
      * <pre><code>
      *   map.put("r2dbc:r2jdbc:h2~tcp://~.~.localhost:8080//tmp/test",
      *           "jdbc:h2:tcp://localhost:8080//tmp/test");
@@ -60,8 +61,7 @@ public class JdbcConnectionFactoryProvider implements ConnectionFactoryProvider 
      *           "jdbc:oracle:thin:@the.oracle.db.server:8080:my_sid");
      *   map.put("r2dbc:r2jdbc:mysql~://///mysql.db.server:3306/my_database",
      *           "jdbc:mysql://mysql.db.server:3306/my_database");
-     *     </code></pre>
-     * </p>
+     * </code></pre>
      *
      * @param options the input options
      * @return somehow corresponding jdbc url
