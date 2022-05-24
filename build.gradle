@@ -37,7 +37,7 @@ dependencies {
     testImplementation "io.projectreactor:reactor-test:$reactorVersion"
     testImplementation "io.r2dbc:r2dbc-spi-test:$r2dbcSpiVersion"
     testImplementation 'com.h2database:h2:2.1.212'
-    testImplementation 'org.junit.jupiter:junit-jupiter-api:5.7.0'
+    testImplementation 'org.junit.jupiter:junit-jupiter-api:5.8.2'
     testImplementation 'org.assertj:assertj-core:3.22.0'
     testImplementation 'org.mockito:mockito-core:4.5.1'
     testImplementation "org.slf4j:slf4j-simple:$slf4jVersion"
