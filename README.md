@@ -1,5 +1,13 @@
 # Reactive Relational Database Connectivity JDBC Implementation
 
+![Maven Central](https://img.shields.io/maven-central/v/party.iroiro/r2dbc-jdbc?label=Maven)
+![Sonatype Nexus (Snapshots)](https://img.shields.io/nexus/s/party.iroiro/r2dbc-jdbc?server=https%3A%2F%2Fs01.oss.sonatype.org&label=Nexus)
+[![GitHub](https://img.shields.io/github/license/gudzpoz/r2dbc-jdbc?label=License)](./LICENSE)
+
+[![Build and Publish](https://github.com/gudzpoz/r2dbc-jdbc/actions/workflows/build.yml/badge.svg)](https://github.com/gudzpoz/r2dbc-jdbc/actions/workflows/build.yml)
+[![Test](https://github.com/gudzpoz/r2dbc-jdbc/actions/workflows/test.yml/badge.svg)](https://github.com/gudzpoz/r2dbc-jdbc/actions/workflows/test.yml)
+[![Code Coverage](https://img.shields.io/codecov/c/gh/gudzpoz/r2dbc-jdbc?label=Test%20Coverage)](https://app.codecov.io/gh/gudzpoz/r2dbc-jdbc)
+
 This project contains a simplistic [Java Database Connectivity (JDBC)](https://docs.oracle.com/javase/8/docs/technotes/guides/jdbc/) implementation of the [R2DBC SPI](https://github.com/r2dbc/r2dbc-spi). This implementation is not intended to be used directly, but rather to be used as the backing implementation for a humane client library.
 
 It requires Java 9.
