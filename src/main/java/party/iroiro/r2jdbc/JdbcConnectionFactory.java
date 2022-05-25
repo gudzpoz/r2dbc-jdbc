@@ -34,10 +34,7 @@ public class JdbcConnectionFactory implements ConnectionFactory, Closeable {
     private Mono<Void> initDispatcher() {
         return Mono.fromCallable(() -> {
             if (!dispatcher.isAlive()) {
-                try {
-                    dispatcher.start();
-                } catch (IllegalThreadStateException ignored) {
-                }
+                dispatcher.start();
             }
             return null;
         });

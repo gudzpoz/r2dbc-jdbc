@@ -19,7 +19,6 @@ package party.iroiro.r2jdbc;
 import io.r2dbc.spi.ConnectionFactory;
 import io.r2dbc.spi.ConnectionFactoryOptions;
 import io.r2dbc.spi.Result;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -68,14 +67,8 @@ final class H2ConnectionFactoryInMemoryTest {
         runCommand(nextInstance, "CREATE TABLE lego (id INT);");
     }
 
-    @Disabled("Not supported")
     @Test
     void closedDatabaseFailsToCreateConnections() {
-    }
-
-    @Test
-    void closedDatabaseReopensToCreateConnections() {
-
         String database = UUID.randomUUID().toString();
         JdbcConnectionFactory connectionFactory = new JdbcConnectionFactory(
                 ConnectionFactoryOptions.parse("r2dbc:r2jdbc:h2~mem:///" + database));
@@ -83,7 +76,7 @@ final class H2ConnectionFactoryInMemoryTest {
         runCommand(connectionFactory, "CREATE TABLE lego (id INT);");
 
         connectionFactory.close().as(StepVerifier::create).verifyComplete();
-        runCommand(connectionFactory, "CREATE TABLE lego (id INT);");
+        connectionFactory.create().as(StepVerifier::create).verifyError(IllegalThreadStateException.class);
     }
 
     @Test
