@@ -294,7 +294,6 @@ class JdbcWorker implements Runnable {
                     int count = metadata.getColumnCount();
                     ArrayList<JdbcColumnMetadata> columns = new ArrayList<>(count);
                     for (int i = 0; i < count; i++) {
-                        log.trace("Column Type: {}", metadata.getColumnType(i + 1));
                         columns.add(new JdbcColumnMetadata(metadata, codec, i + 1));
                     }
                     offer(new JdbcPacket(new JdbcRowMetadata(columns)), job.consumer);

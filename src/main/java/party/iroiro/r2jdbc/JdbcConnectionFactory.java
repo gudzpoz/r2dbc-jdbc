@@ -78,6 +78,7 @@ public class JdbcConnectionFactory implements ConnectionFactory, Closeable {
                     } else {
                         return Mono.empty();
                     }
-                }).transform(workerLock::unlockOnTerminate);
+                }).transform(workerLock::unlockOnTerminate)
+                .doOnTerminate(dispatcher::interrupt);
     }
 }
