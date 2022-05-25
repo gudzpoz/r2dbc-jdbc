@@ -9,6 +9,7 @@ import party.iroiro.r2jdbc.codecs.DefaultConverter;
 import party.iroiro.r2jdbc.util.QueueDispatcher;
 import reactor.core.publisher.Mono;
 
+import javax.annotation.Nullable;
 import java.lang.reflect.InvocationTargetException;
 import java.time.Duration;
 import java.util.concurrent.LinkedBlockingDeque;
@@ -36,7 +37,7 @@ public class JdbcConnection implements Connection {
         metadata = new AtomicReference<>();
         try {
             converter = getConverter(options);
-        } catch (ClassNotFoundException | InstantiationException
+        } catch (ClassNotFoundException | InstantiationException | ClassCastException
                 | IllegalAccessException | NoSuchMethodException | InvocationTargetException e) {
             throw new JdbcException(e);
         }
@@ -65,7 +66,7 @@ public class JdbcConnection implements Connection {
         return worker.start().doOnNext(metadata::set).thenReturn(this);
     }
 
-    Mono<Void> voidSend(JdbcJob.Job job, Object data) {
+    Mono<Void> voidSend(JdbcJob.Job job, @Nullable Object data) {
         boolean v = valid.get();
         if (!v) {
             return Mono.empty();
@@ -73,11 +74,11 @@ public class JdbcConnection implements Connection {
         return JdbcWorker.voidSend(worker, job, data);
     }
 
-    boolean offerNow(JdbcJob.Job job, Object data, BiConsumer<JdbcPacket, Exception> consumer) {
+    boolean offerNow(JdbcJob.Job job, @Nullable Object data, BiConsumer<JdbcPacket, Exception> consumer) {
         return JdbcWorker.offerNow(worker, job, data, consumer);
     }
 
-    <T> Mono<T> send(JdbcJob.Job job, Object data, Function<JdbcPacket, T> converter) {
+    <T> Mono<T> send(JdbcJob.Job job, @Nullable Object data, Function<JdbcPacket, T> converter) {
         if (!valid.get()) {
             return Mono.empty();
         }

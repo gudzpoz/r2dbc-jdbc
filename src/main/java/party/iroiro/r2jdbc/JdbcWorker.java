@@ -68,7 +68,7 @@ class JdbcWorker implements Runnable {
         return DriverManager.getConnection(details.getUrl(), details.getProperties());
     }
 
-    static Mono<Void> voidSend(JdbcWorker worker, JdbcJob.Job job, Object data) {
+    static Mono<Void> voidSend(JdbcWorker worker, JdbcJob.Job job, @Nullable Object data) {
         return Mono.create(voidMonoSink -> voidMonoSink.onRequest(
                 ignored -> {
                     if (!offerNow(worker, job, data, (i, e) -> {
@@ -85,7 +85,7 @@ class JdbcWorker implements Runnable {
 
     static boolean offerNow(JdbcWorker worker,
                             JdbcJob.Job job,
-                            Object data,
+                            @Nullable Object data,
                             BiConsumer<JdbcPacket, Exception> consumer) {
         if (worker.notEnded()) {
             // FIXME: Edge cases
@@ -95,7 +95,8 @@ class JdbcWorker implements Runnable {
         }
     }
 
-    static <T> Mono<T> send(JdbcWorker worker, JdbcJob.Job job, Object data, Function<JdbcPacket, T> converter) {
+    static <T> Mono<T> send(JdbcWorker worker, JdbcJob.Job job,
+                            @Nullable Object data, Function<JdbcPacket, T> converter) {
         return Mono.create(sink -> sink.onRequest(
                 ignored -> {
                     if (!offerNow(worker, job, data, (i, e) -> {
@@ -341,7 +342,7 @@ class JdbcWorker implements Runnable {
     }
 
     private Object execute(String sql, @Nullable ArrayList<Map<Integer, Object>> bindings,
-                           String[] keys) throws SQLException {
+                           @Nullable String[] keys) throws SQLException {
         PreparedStatement s = getCachedOrPrepare(sql, keys);
         ArrayList<Object> results = new ArrayList<>(bindings == null ? 1 : bindings.size());
         if (bindings == null) {
@@ -357,7 +358,8 @@ class JdbcWorker implements Runnable {
         return results;
     }
 
-    private void executeSingle(ArrayList<Object> results, PreparedStatement s, Map<Integer, Object> binding) throws SQLException {
+    private void executeSingle(ArrayList<Object> results, PreparedStatement s,
+                               @Nullable Map<Integer, Object> binding) throws SQLException {
         if (binding != null) {
             bindStatement(s, binding);
         }
@@ -376,7 +378,7 @@ class JdbcWorker implements Runnable {
         }
     }
 
-    private PreparedStatement getCachedOrPrepare(String sql, String[] keys) throws SQLException {
+    private PreparedStatement getCachedOrPrepare(String sql, @Nullable String[] keys) throws SQLException {
         PreparedStatement statement;
         if (keys == null) {
             statement = conn.prepareStatement(sql);

@@ -3,6 +3,7 @@ package party.iroiro.r2jdbc;
 import io.r2dbc.spi.Result;
 import io.r2dbc.spi.Row;
 import io.r2dbc.spi.RowMetadata;
+import lombok.NonNull;
 import party.iroiro.r2jdbc.codecs.Converter;
 
 import java.util.ArrayList;
@@ -46,8 +47,13 @@ public class JdbcRow implements Row, Result.RowSegment {
     }
 
     @Override
+    @NonNull
     public RowMetadata getMetadata() {
-        return metadata;
+        if (metadata == null) {
+            throw new NullPointerException();
+        } else {
+            return metadata;
+        }
     }
 
     public void setMetadata(JdbcRowMetadata metadata) {

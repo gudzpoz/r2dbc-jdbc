@@ -8,7 +8,9 @@
 [![Test](https://github.com/gudzpoz/r2dbc-jdbc/actions/workflows/test.yml/badge.svg)](https://github.com/gudzpoz/r2dbc-jdbc/actions/workflows/test.yml)
 [![Code Coverage](https://img.shields.io/codecov/c/gh/gudzpoz/r2dbc-jdbc?label=Test%20Coverage)](https://app.codecov.io/gh/gudzpoz/r2dbc-jdbc)
 
-This project contains a simplistic [Java Database Connectivity (JDBC)](https://docs.oracle.com/javase/8/docs/technotes/guides/jdbc/) implementation of the [R2DBC SPI](https://github.com/r2dbc/r2dbc-spi). This implementation is not intended to be used directly, but rather to be used as the backing implementation for a humane client library.
+This project contains a simplistic [Java Database Connectivity (JDBC)](https://docs.oracle.com/javase/8/docs/technotes/guides/jdbc/)
+implementation of the [R2DBC SPI](https://github.com/r2dbc/r2dbc-spi). This implementation is not intended to be used directly,
+but rather to be used as the backing implementation for a humane client library.
 
 As for Spring Data, this library provides a `R2dbcDialectProvider`.
 You may simply set `spring.r2dbc.url` accordingly in your `application.yml/properties`
@@ -38,9 +40,12 @@ JDBC Connection                                 Reactive
 
 ## Why?
 
-[R2DBC H2](https://github.com/r2dbc/r2dbc-h2) is not *that* non-blocking. This library, as is shown in the above diagram, actually simulates the regular TCP Client-Server connection to provider reactive access.
+[R2DBC H2](https://github.com/r2dbc/r2dbc-h2) is not *that* non-blocking. This library, as is shown in the above diagram,
+actually simulates the regular TCP Client-Server connection to provider reactive access.
 
-For *big* databases like MariaDB or PostgreSQL, you might as well go to [Drivers](https://r2dbc.io/drivers/) to find a better SPI. However, if you want reactivity for some embedded databases like [H2](https://www.h2database.com), [Derby](https://db.apache.org/derby/) or [HSQLDB](https://hsqldb.org/), maybe you can have a go with this.
+For *big* databases like MariaDB or PostgreSQL, you might as well go to [Drivers](https://r2dbc.io/drivers/) to find a
+better SPI. However, if you want reactivity for some embedded databases like [H2](https://www.h2database.com),
+[Derby](https://db.apache.org/derby/) or [HSQLDB](https://hsqldb.org/), maybe you can have a go with this.
 
 ## Usage
 
@@ -147,7 +152,8 @@ Default: **No**</td>
 `JdbcConnectionFactoryProvider.WAIT`
 
 Example: `r2dbc:r2jdbc:h2~mem:///test?j2wait=-1`</td>
-<td>If sharing workers, wait for WAIT (ms) interval for new connections before shutting down worker when all connections closes. If negative, the JDBC connection is only closed after closing the factory.
+<td>If sharing workers, wait for WAIT (ms) interval for new connections before shutting down worker when all connections close.
+If negative, the JDBC connection is only closed after closing the factory.
 
 Default: **Do not wait. Shut down once all connection closes.**</td>
 </tr><tr><td>
@@ -181,6 +187,7 @@ Default: **Built-in**</td>
 
 ## License
 
-I am borrowing tests from [R2DBC H2](https://github.com/r2dbc/r2dbc-h2), which is licensed under [Apache License 2.0](https://github.com/r2dbc/r2dbc-h2/blob/main/LICENSE).
+I am borrowing tests from [R2DBC H2](https://github.com/r2dbc/r2dbc-h2), which is licensed under
+[Apache License 2.0](https://github.com/r2dbc/r2dbc-h2/blob/main/LICENSE).
 
 Licensed under the [Apache License Version 2.0](./LICENSE)

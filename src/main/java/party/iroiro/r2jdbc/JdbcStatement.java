@@ -63,6 +63,7 @@ public class JdbcStatement implements Statement {
     }
 
     private int getIndexOfNamedParameter(String name) {
+        //noinspection ConstantConditions
         if (name == null) {
             throw new IllegalArgumentException("index must not be null");
         }

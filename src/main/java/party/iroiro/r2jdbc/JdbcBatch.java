@@ -11,9 +11,6 @@ public class JdbcBatch implements Batch {
     private final JdbcConnection conn;
 
     JdbcBatch(JdbcConnection conn) {
-        if (conn == null) {
-            throw new IllegalArgumentException("connection must not be null");
-        }
         this.conn = conn;
         sql = new ArrayList<>();
     }

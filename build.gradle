@@ -25,18 +25,21 @@ ext {
 }
 
 dependencies {
+    //noinspection GradlePackageUpdate -> TODO: Until Spring Data upgrades to R2DBC-SPI 1.0.0
     implementation "io.r2dbc:r2dbc-spi:$r2dbcSpiVersion"
     implementation "io.projectreactor:reactor-core:$reactorVersion"
     implementation 'party.iroiro:reactor-locks:0.4.0'
     implementation 'com.github.marianobarrios:linked-blocking-multi-queue:0.4.0'
     implementation 'commons-beanutils:commons-beanutils:1.9.4'
     implementation "org.slf4j:slf4j-api:$slf4jVersion"
+    implementation 'com.google.code.findbugs:jsr305:3.0.2'
     api "org.springframework.boot:spring-boot-starter-data-r2dbc:$springStarterVersion"
     compileOnly "org.projectlombok:lombok:$lombokVersion"
     annotationProcessor "org.projectlombok:lombok:$lombokVersion"
     testCompileOnly "org.projectlombok:lombok:$lombokVersion"
     testAnnotationProcessor "org.projectlombok:lombok:$lombokVersion"
     testImplementation "io.projectreactor:reactor-test:$reactorVersion"
+    //noinspection GradlePackageUpdate -> TODO: Until Spring Data upgrades to R2DBC-SPI 1.0.0
     testImplementation "io.r2dbc:r2dbc-spi-test:$r2dbcSpiVersion"
     testImplementation 'com.h2database:h2:2.1.212'
     testImplementation 'org.junit.jupiter:junit-jupiter-api:5.8.2'
