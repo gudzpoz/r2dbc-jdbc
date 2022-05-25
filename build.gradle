@@ -24,6 +24,15 @@ ext {
     springStarterVersion = '2.7.0'
 }
 
+java {
+    withSourcesJar()
+    withJavadocJar()
+
+    registerFeature('spring') {
+        usingSourceSet(sourceSets.main)
+    }
+}
+
 dependencies {
     //noinspection GradlePackageUpdate -> TODO: Until Spring Data upgrades to R2DBC-SPI 1.0.0
     implementation "io.r2dbc:r2dbc-spi:$r2dbcSpiVersion"
@@ -33,11 +42,13 @@ dependencies {
     implementation 'commons-beanutils:commons-beanutils:1.9.4'
     implementation "org.slf4j:slf4j-api:$slf4jVersion"
     implementation 'com.google.code.findbugs:jsr305:3.0.2'
-    api "org.springframework.boot:spring-boot-starter-data-r2dbc:$springStarterVersion"
+    springImplementation "org.springframework.boot:spring-boot-starter-data-r2dbc:$springStarterVersion"
+
     compileOnly "org.projectlombok:lombok:$lombokVersion"
     annotationProcessor "org.projectlombok:lombok:$lombokVersion"
     testCompileOnly "org.projectlombok:lombok:$lombokVersion"
     testAnnotationProcessor "org.projectlombok:lombok:$lombokVersion"
+
     testImplementation "io.projectreactor:reactor-test:$reactorVersion"
     //noinspection GradlePackageUpdate -> TODO: Until Spring Data upgrades to R2DBC-SPI 1.0.0
     testImplementation "io.r2dbc:r2dbc-spi-test:$r2dbcSpiVersion"
@@ -52,11 +63,6 @@ dependencies {
 
 test {
     useJUnitPlatform()
-}
-
-java {
-    withSourcesJar()
-    withJavadocJar()
 }
 
 jar {

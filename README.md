@@ -103,6 +103,25 @@ runtimeOnly 'party.iroiro:r2dbc-jdbc:0.1.0'
 
 </details>
 
+<details>
+<summary>More On Spring Data</summary>
+
+Spring Data requires a `R2dbcDialectProvider` to map repository operations to SQLs. Since different databases may differ in SQL grammar, you may set one matching your database with, for example:
+
+```java
+System.setProperty("j2dialect", "org.springframework.data.r2dbc.dialect.H2Dialect");
+```
+
+Available dialects in Spring Data Reactive are:
+
+- `org.springframework.data.r2dbc.dialect.H2Dialect`
+- `org.springframework.data.r2dbc.dialect.PostgresDialect`
+- `org.springframework.data.r2dbc.dialect.MySqlDialect`
+- `org.springframework.data.r2dbc.dialect.OracleDialect`
+- `org.springframework.data.r2dbc.dialect.SqlServerDialect`
+
+</details>
+
 ### Passing JDBC urls
 
 Note that you cannot pass a raw JDBC url directly. With R2DBC API, the call might look like this:
