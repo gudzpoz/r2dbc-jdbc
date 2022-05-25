@@ -28,6 +28,12 @@ public class JdbcUrlTest {
                 "jdbc:oracle:thin:@the.oracle.db.server:8080:my_sid");
         map.put("r2dbc:r2jdbc:mysql~://///mysql.db.server:3306/my_database",
                 "jdbc:mysql://mysql.db.server:3306/my_database");
+        map.put("r2dbc:r2jdbc:some://localhost:8080",
+                "jdbc:some:localhost:8080");
+        map.put("r2dbc:r2jdbc:some://localhost:8080/path",
+                "jdbc:some:localhost:8080/path");
+        map.put("r2dbc:r2jdbc:some://localhost/path",
+                "jdbc:some:localhost/path");
         for (Map.Entry<String, String> entry : map.entrySet()) {
             String url = JdbcConnectionFactoryProvider.getJdbcConnectionUrl(
                     ConnectionFactoryOptions.parse(entry.getKey())

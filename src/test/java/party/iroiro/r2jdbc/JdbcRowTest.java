@@ -7,6 +7,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.mock;
 
 public class JdbcRowTest {
     @Test
@@ -19,5 +20,7 @@ public class JdbcRowTest {
         assertEquals("1024", row.get(0, String.class));
 
         assertThrows(NullPointerException.class, row::getMetadata);
+        row.setMetadata(mock(JdbcRowMetadata.class));
+        assertNotNull(row.getMetadata());
     }
 }

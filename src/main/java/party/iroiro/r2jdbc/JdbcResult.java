@@ -135,7 +135,7 @@ public class JdbcResult implements Result {
     @Override
     public <T> Flux<T> map(BiFunction<Row, RowMetadata, ? extends T> mappingFunction) {
         return fetchMetadata().flatMapMany(metadata ->
-                fetchRows(metadata).log().map(row -> mappingFunction.apply(row, metadata))
+                fetchRows(metadata).map(row -> mappingFunction.apply(row, metadata))
         );
     }
 
