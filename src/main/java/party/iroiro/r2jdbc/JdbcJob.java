@@ -31,5 +31,5 @@ public class JdbcJob {
     }
     public final Job job;
     public final Object data;
-    public final BiConsumer<JdbcPacket, Exception> consumer;
+    public final BiConsumer<JdbcPacket, Throwable> consumer;
 }

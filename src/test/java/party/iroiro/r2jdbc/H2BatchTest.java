@@ -45,6 +45,7 @@ final class H2BatchTest {
             .withMessage("Statement 'test-query-$1' is not supported.  This is often due to the presence of parameters.");
     }
 
+    @Disabled("It is internal API")
     @Test
     void constructorNoClient() {
         assertThatIllegalArgumentException().isThrownBy(() -> new JdbcBatch(null))

@@ -74,7 +74,7 @@ public class JdbcConnection implements Connection {
         return JdbcWorker.voidSend(worker, job, data);
     }
 
-    boolean offerNow(JdbcJob.Job job, @Nullable Object data, BiConsumer<JdbcPacket, Exception> consumer) {
+    boolean offerNow(JdbcJob.Job job, @Nullable Object data, BiConsumer<JdbcPacket, Throwable> consumer) {
         return JdbcWorker.offerNow(worker, job, data, consumer);
     }
 

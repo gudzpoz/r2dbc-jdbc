@@ -86,7 +86,7 @@ class JdbcWorker implements Runnable {
     static boolean offerNow(JdbcWorker worker,
                             JdbcJob.Job job,
                             @Nullable Object data,
-                            BiConsumer<JdbcPacket, Exception> consumer) {
+                            BiConsumer<JdbcPacket, Throwable> consumer) {
         if (worker.notEnded()) {
             // FIXME: Edge cases
             return worker.getJobQueue().offer(new JdbcJob(job, data, consumer));
@@ -131,15 +131,15 @@ class JdbcWorker implements Runnable {
         }
     }
 
-    private void offer(JdbcPacket packet, BiConsumer<JdbcPacket, Exception> consumer) {
+    private void offer(JdbcPacket packet, BiConsumer<JdbcPacket, Throwable> consumer) {
         out.offer(new QueueItem<>(packet, null, consumer, true));
     }
 
-    private void offer(BiConsumer<JdbcPacket, Exception> consumer) {
+    private void offer(BiConsumer<JdbcPacket, Throwable> consumer) {
         out.offer(new QueueItem<>(null, null, consumer, false));
     }
 
-    private void offer(Exception e, BiConsumer<JdbcPacket, Exception> consumer) {
+    private void offer(Exception e, BiConsumer<JdbcPacket, Throwable> consumer) {
         out.offer(new QueueItem<>(
                 null, e, consumer, true
         ));
@@ -159,7 +159,14 @@ class JdbcWorker implements Runnable {
             }
             return;
         }
-        process(job);
+        try {
+            process(job);
+        } catch (InterruptedException e) {
+            throw e;
+        } catch (Throwable any) {
+            log.error("Unexpected exception", any);
+            offer(new JdbcException(any), job.consumer);
+        }
     }
 
     private void process(JdbcJob job) throws InterruptedException {
@@ -278,6 +285,10 @@ class JdbcWorker implements Runnable {
                 break;
             case RESULT_METADATA:
                 ResultSet result = (ResultSet) job.data;
+                if (result == null) {
+                    offer(new JdbcException(new IllegalArgumentException("Null ResultSet")), job.consumer);
+                    break;
+                }
                 try {
                     ResultSetMetaData metadata = result.getMetaData();
                     int count = metadata.getColumnCount();
@@ -293,6 +304,10 @@ class JdbcWorker implements Runnable {
                 break;
             case RESULT_ROWS:
                 JdbcResult.JdbcResultRequest request = (JdbcResult.JdbcResultRequest) job.data;
+                if (request.result == null) {
+                    offer(new JdbcException(new IllegalArgumentException("Null ResultSet")), job.consumer);
+                    break;
+                }
                 ArrayList<JdbcRow> response = new ArrayList<>(request.count + 1);
                 try {
                     ResultSet row = request.result;

@@ -14,7 +14,7 @@ public class QueueTest {
         Thread dispatcher = new Thread(adapter);
         dispatcher.start();
         LinkedBlockingMultiQueue<Integer, QueueItem<JdbcPacket>>.SubQueue sub = adapter.subQueue();
-        BiConsumer<JdbcPacket, Exception> consumer =
+        BiConsumer<JdbcPacket, Throwable> consumer =
                 (p, e) -> System.out.println(Thread.currentThread().getName() + " " + e.getMessage());
         new Thread(() -> {
             System.out.println("From " + Thread.currentThread().getName());

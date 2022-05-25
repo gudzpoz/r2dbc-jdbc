@@ -33,38 +33,35 @@ public class JdbcResult implements Result {
     private final JdbcConnection conn;
     private final int fetchSize;
     private final ArrayList<Predicate<Segment>> filters;
-    private final Exception e;
+    private final Throwable e;
     private final Converter converter;
 
     JdbcResult(JdbcConnection conn, Object data, int fetchSize, Converter converter) {
         this.converter = converter;
-        int[] finalUpdates;
         this.conn = conn;
         this.fetchSize = fetchSize;
-        if (data instanceof int[]) {
-            finalUpdates = (int[]) data;
-        } else {
-            finalUpdates = null;
-        }
+
+        this.result = new AtomicReference<>();
 
         if (data instanceof ResultSet) {
-            this.result = new AtomicReference<>((ResultSet) data);
-        } else {
-            this.result = new AtomicReference<>(null);
+            this.result.set((ResultSet) data);
         }
 
-        if (data instanceof Exception) {
-            this.e = (Exception) data;
+        if (data instanceof Throwable) {
+            this.e = (Throwable) data;
         } else {
             e = null;
         }
 
-        if (data instanceof Pair) {
-            finalUpdates = (int[]) ((Pair) data).getFirst();
+        if (data instanceof int[]) {
+            this.updated = (int[]) data;
+        } else if (data instanceof Pair) {
+            this.updated = (int[]) ((Pair) data).getFirst();
             this.result.set((ResultSet) ((Pair) data).getSecond());
+        } else {
+            this.updated = null;
         }
 
-        this.updated = finalUpdates;
         filters = new ArrayList<>();
         cleaner.register(this, new ResultSetCleaner(result, conn));
     }
@@ -75,10 +72,11 @@ public class JdbcResult implements Result {
 
     @Override
     public Flux<Integer> getRowsUpdated() {
+        Flux<Integer> error = e == null ? Flux.empty() : Flux.error(e);
         if (updated == null) {
-            return Flux.empty();
+            return error;
         } else {
-            return Flux.fromStream(Arrays.stream(updated).boxed());
+            return error.thenMany(Flux.fromStream(Arrays.stream(updated).boxed()));
         }
     }
 
@@ -87,26 +85,35 @@ public class JdbcResult implements Result {
     }
 
     private Flux<JdbcRow> fetchRows(JdbcRowMetadata metadata) {
+
+        if (result.get() == null) {
+            return Flux.empty();
+        }
+
         return Flux.create(sink -> {
             sink.onRequest(number -> {
                 if (!conn.offerNow(
                         JdbcJob.Job.RESULT_ROWS,
                         new JdbcResultRequest(
                                 result.get(),
-                                fetchSize > 0 ? fetchSize : (int) number, metadata
+                                fetchSize > 0 ? fetchSize : (int) number,
+                                metadata
                         ),
                         (packet, exception) -> {
-                            List<?> list = (List<?>) packet.data;
-                            for (Object item : list) {
-                                if (item == null) {
-                                    sink.complete();
-                                    break;
+                            if (exception == null) {
+                                List<?> list = (List<?>) packet.data;
+                                for (Object item : list) {
+                                    if (item == null) {
+                                        sink.complete();
+                                        break;
+                                    }
+                                    JdbcRow row = (JdbcRow) item;
+                                    row.setMetadata(metadata);
+                                    row.setConverter(converter);
+                                    sink.next(row);
                                 }
-                                assert item instanceof JdbcRow;
-                                JdbcRow row = (JdbcRow) item;
-                                row.setMetadata(metadata);
-                                row.setConverter(converter);
-                                sink.next(row);
+                            } else {
+                                sink.error(exception);
                             }
                         })) {
                     sink.error(new IndexOutOfBoundsException("Unable to add fetch job to queue"));
@@ -126,9 +133,9 @@ public class JdbcResult implements Result {
     }
 
     @Override
-    public <T> Publisher<T> map(BiFunction<Row, RowMetadata, ? extends T> mappingFunction) {
+    public <T> Flux<T> map(BiFunction<Row, RowMetadata, ? extends T> mappingFunction) {
         return fetchMetadata().flatMapMany(metadata ->
-                fetchRows(metadata).map(row -> mappingFunction.apply(row, metadata))
+                fetchRows(metadata).log().map(row -> mappingFunction.apply(row, metadata))
         );
     }
 
@@ -139,7 +146,7 @@ public class JdbcResult implements Result {
     }
 
     @Override
-    public <T> Publisher<T> flatMap(Function<Segment, ? extends Publisher<? extends T>> mappingFunction) {
+    public <T> Flux<T> flatMap(Function<Segment, ? extends Publisher<? extends T>> mappingFunction) {
         return fetchMetadata().flatMapMany(metadata ->
                 Flux.merge(fetchRows(metadata),
                         produceCountSegments(),
@@ -147,7 +154,7 @@ public class JdbcResult implements Result {
         );
     }
 
-    private Publisher<Segment> produceErrors() {
+    private Mono<Segment> produceErrors() {
         if (this.e == null) {
             return Mono.empty();
         } else {
@@ -159,9 +166,9 @@ public class JdbcResult implements Result {
         return filters.stream().map(predicate -> predicate.test(segment)).reduce(true, Boolean::logicalAnd);
     }
 
-    private Publisher<Segment> produceCountSegments() {
+    private Flux<Segment> produceCountSegments() {
         if (updated == null) {
-            return Mono.empty();
+            return Flux.empty();
         } else {
             return Flux.fromStream(Arrays.stream(updated).boxed()).map(count -> {
                 if (count >= 0) {

@@ -5,7 +5,7 @@ import io.r2dbc.spi.Result;
 
 public class JdbcException extends R2dbcException implements Result.Message {
 
-    public JdbcException(Exception e) {
+    public JdbcException(Throwable e) {
         super(e.getMessage(), e);
     }
 

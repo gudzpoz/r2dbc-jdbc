@@ -14,6 +14,6 @@ import java.util.function.BiConsumer;
 public class QueueItem<T> {
     public T item;
     public Exception e;
-    public BiConsumer<T, Exception> consumer;
+    public BiConsumer<T, Throwable> consumer;
     boolean parallel;
 }
