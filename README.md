@@ -160,23 +160,6 @@ Example: `r2dbc:r2jdbc:h2:///?j2url=jdbc:h2:mem:test`</td>
 Default: **Deduce from R2DBC url**</td>
 </tr><tr><td>
 
-`JdbcConnectionFactoryProvider.SHARED`
-
-Example: `r2dbc:r2jdbc:h2~mem:///test?j2shared=true`</td>
-<td>Multiple connection shares the same worker.
-
-Default: **No**</td>
-</tr><tr><td>
-
-`JdbcConnectionFactoryProvider.WAIT`
-
-Example: `r2dbc:r2jdbc:h2~mem:///test?j2wait=-1`</td>
-<td>If sharing workers, wait for WAIT (ms) interval for new connections before shutting down worker when all connections close.
-If negative, the JDBC connection is only closed after closing the factory.
-
-Default: **Do not wait. Shut down once all connection closes.**</td>
-</tr><tr><td>
-
 `JdbcConnectionFactoryProvider.FORWARD`
 
 Example: `r2dbc:r2jdbc:h2:///test?CIPHER=AES&j2forward=CIPHER`</td>

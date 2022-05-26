@@ -9,8 +9,6 @@ import java.util.Properties;
 public class JdbcConnectionFactoryProvider implements ConnectionFactoryProvider {
     public static final Option<String> FORWARD = Option.valueOf("j2forward");
     public static final Option<String> URL = Option.valueOf("j2url");
-    public static final Option<String> SHARED = Option.valueOf("j2shared");
-    public static final Option<String> WAIT = Option.valueOf("j2wait");
     public static final Option<String> CODEC = Option.valueOf("j2codec");
     public static final Option<String> CONV = Option.valueOf("j2conv");
 
