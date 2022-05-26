@@ -111,7 +111,7 @@ class JdbcWorker implements Runnable {
                 }));
     }
 
-    private synchronized boolean notEnded() {
+    public synchronized boolean notEnded() {
         return state != State.ENDED;
     }
 
@@ -266,7 +266,7 @@ class JdbcWorker implements Runnable {
                 try {
                     Object result = execute(statement.sql, statement.bindings, statement.wantsGenerated.get());
                     offer(new JdbcPacket(result), job.consumer);
-                } catch (SQLException e) {
+                } catch (SQLException | IllegalArgumentException e) {
                     offer(e, job.consumer);
                 }
                 break;

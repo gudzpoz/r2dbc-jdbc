@@ -8,18 +8,20 @@ import org.junit.jupiter.api.Test;
 import party.iroiro.lock.Lock;
 import party.iroiro.lock.ReactiveLock;
 import party.iroiro.r2jdbc.util.QueueDispatcher;
+import reactor.test.StepVerifier;
 
 import java.lang.reflect.Field;
 import java.sql.Connection;
+import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.BiConsumer;
 
 import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.*;
 
 @Slf4j
 public class JdbcWorkerTest {
@@ -105,6 +107,10 @@ public class JdbcWorkerTest {
 
         assertException(worker, lock, JdbcJob.Job.VALIDATE, null, SQLException.class);
 
+        JdbcStatement statement = new JdbcStatement("", mock(JdbcConnection.class));
+        statement.bindings.clear();
+        assertException(worker, lock, JdbcJob.Job.EXECUTE_STATEMENT, statement, IllegalArgumentException.class);
+
         ResultSet resultSet = mock(ResultSet.class);
         doThrow(SQLException.class).when(resultSet).close();
         assertException(worker, lock, JdbcJob.Job.CLOSE_RESULT, resultSet, SQLException.class);
@@ -158,9 +164,30 @@ public class JdbcWorkerTest {
                     .setTransactionIsolation(Connection.TRANSACTION_SERIALIZABLE);
             doThrow(SQLException.class).when(connection).isValid(0);
             doThrow(SQLException.class).when(connection).close();
+            when(connection.prepareStatement(any())).thenReturn(mock(PreparedStatement.class));
         } catch (Throwable throwable) {
             fail();
         }
         return connection;
+    }
+
+    @Test
+    public void sendTest() {
+        JdbcWorker worker = mock(JdbcWorker.class);
+        when(worker.notEnded()).thenReturn(false);
+        JdbcWorker.voidSend(worker, JdbcJob.Job.INIT, null).as(StepVerifier::create).verifyError(
+                JdbcException.class
+        );
+        when(worker.notEnded()).thenReturn(true);
+        //noinspection unchecked
+        when(worker.getJobQueue()).thenReturn(mock(BlockingQueue.class));
+        when(worker.getJobQueue().offer(any())).thenAnswer(invocation -> {
+            BiConsumer<JdbcPacket, Throwable> argument = invocation.getArgument(0, JdbcJob.class).consumer;
+            argument.accept(null, new IllegalArgumentException());
+            return true;
+        });
+        JdbcWorker.voidSend(worker, JdbcJob.Job.INIT, null).as(StepVerifier::create).verifyError(
+                JdbcException.class
+        );
     }
 }
