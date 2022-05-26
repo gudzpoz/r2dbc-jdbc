@@ -16,14 +16,11 @@ import reactor.util.annotation.Nullable;
 
 import java.lang.reflect.InvocationTargetException;
 import java.sql.*;
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
 
@@ -33,15 +30,11 @@ class JdbcWorker implements Runnable {
     private final BlockingQueue<JdbcJob> jobs;
     private final LinkedBlockingMultiQueue<Integer, QueueItem<JdbcPacket>>.SubQueue out;
     private final ConnectionFactoryOptions options;
-    private final Thread thread;
     private final SingletonMono<JdbcConnectionMetadata> metadata;
-    private final AtomicInteger refCount;
-    private final Duration pollDuration;
-    private final boolean shared;
     private final List<JdbcJob> closeJobs;
     private State state;
     private Codec codec;
-    private Connection conn;
+    private final List<Connection> connections;
 
     JdbcWorker(BlockingQueue<JdbcJob> jobs,
                LinkedBlockingMultiQueue<Integer, QueueItem<JdbcPacket>>.SubQueue out,
@@ -49,17 +42,14 @@ class JdbcWorker implements Runnable {
         this.jobs = jobs;
         this.out = out;
         this.options = options;
-        this.conn = null;
-        this.thread = new Thread(this);
-        String waitTime = (String) options.getValue(JdbcConnectionFactoryProvider.WAIT);
-        int time = waitTime == null ? 0 : Integer.parseInt(waitTime);
-        this.pollDuration = Duration.ofMillis(time);
+        this.connections = new LinkedList<>();
+        Thread thread = new Thread(this);
         metadata = new SingletonMono<>();
-        refCount = new AtomicInteger(0);
-        shared = options.hasOption(JdbcConnectionFactoryProvider.SHARED);
         codec = null;
         closeJobs = new LinkedList<>();
-        state = State.RUNNABLE;
+        state = State.STARTING;
+
+        thread.start();
     }
 
     private static Connection getConnection(ConnectionFactoryOptions options) throws SQLException {
@@ -68,10 +58,11 @@ class JdbcWorker implements Runnable {
         return DriverManager.getConnection(details.getUrl(), details.getProperties());
     }
 
-    static Mono<Void> voidSend(JdbcWorker worker, JdbcJob.Job job, @Nullable Object data) {
+    static Mono<Void> voidSend(JdbcWorker worker, @Nullable Connection connection,
+                               JdbcJob.Job job, @Nullable Object data) {
         return Mono.create(voidMonoSink -> voidMonoSink.onRequest(
                 ignored -> {
-                    if (!offerNow(worker, job, data, (i, e) -> {
+                    if (!offerNow(worker, connection, job, data, (i, e) -> {
                         if (e == null) {
                             voidMonoSink.success();
                         } else {
@@ -84,22 +75,23 @@ class JdbcWorker implements Runnable {
     }
 
     static boolean offerNow(JdbcWorker worker,
+                            @Nullable Connection connection,
                             JdbcJob.Job job,
                             @Nullable Object data,
                             BiConsumer<JdbcPacket, Throwable> consumer) {
         if (worker.notEnded()) {
             // FIXME: Edge cases
-            return worker.getJobQueue().offer(new JdbcJob(job, data, consumer));
+            return worker.getJobQueue().offer(new JdbcJob(connection, job, data, consumer));
         } else {
             return false;
         }
     }
 
-    static <T> Mono<T> send(JdbcWorker worker, JdbcJob.Job job,
+    static <T> Mono<T> send(JdbcWorker worker, @Nullable Connection connection, JdbcJob.Job job,
                             @Nullable Object data, Function<JdbcPacket, T> converter) {
         return Mono.create(sink -> sink.onRequest(
                 ignored -> {
-                    if (!offerNow(worker, job, data, (i, e) -> {
+                    if (!offerNow(worker, connection, job, data, (i, e) -> {
                         if (e == null) {
                             sink.success(converter.apply(i));
                         } else {
@@ -146,19 +138,7 @@ class JdbcWorker implements Runnable {
     }
 
     private void takeAndProcess() throws InterruptedException {
-        JdbcJob job = (pollDuration.isZero() || pollDuration.isNegative()) ?
-                jobs.take() : jobs.poll(pollDuration.toMillis(), TimeUnit.MILLISECONDS);
-        if (job == null) {
-            synchronized (this) {
-                if (refCount.get() == 0) {
-                    if (shared) {
-                        state = State.ENDED;
-                        throw new InterruptedException("Closing after no connection for sometime");
-                    }
-                }
-            }
-            return;
-        }
+        JdbcJob job = jobs.take();
         try {
             process(job);
         } catch (InterruptedException e) {
@@ -171,23 +151,31 @@ class JdbcWorker implements Runnable {
 
     private void process(JdbcJob job) throws InterruptedException {
         log.trace("Processing: {}", job.job);
+        Connection conn = job.connection;
         switch (job.job) {
-            case INIT:
-                if (conn != null) {
-                    offer(new IllegalStateException("Tries to initialize twice"), job.consumer);
-                } else {
-                    try {
-                        conn = getConnection(options);
-                        DatabaseMetaData metaData = conn.getMetaData();
-                        offer(new JdbcPacket(
-                                new JdbcConnectionMetadata(
-                                        metaData.getDatabaseProductName(),
-                                        metaData.getDatabaseProductVersion()
-                                )
-                        ), job.consumer);
-                    } catch (SQLException e) {
-                        offer(e, job.consumer);
-                    }
+            case INIT_CONNECTION:
+                try {
+                    conn = getConnection(options);
+                    connections.add(conn);
+                    DatabaseMetaData metaData = conn.getMetaData();
+                    offer(new JdbcPacket(
+                            new JdbcConnectionMetadata(
+                                    conn,
+                                    metaData.getDatabaseProductName(),
+                                    metaData.getDatabaseProductVersion()
+                            )
+                    ), job.consumer);
+                } catch (SQLException e) {
+                    offer(e, job.consumer);
+                }
+                break;
+            case CLOSE_CONNECTION:
+                try {
+                    commitAndClose(conn);
+                    connections.remove(conn);
+                    offer(job.consumer);
+                } catch (SQLException e) {
+                    offer(e, job.consumer);
                 }
                 break;
             case GET_AUTO_COMMIT:
@@ -264,7 +252,8 @@ class JdbcWorker implements Runnable {
             case EXECUTE_STATEMENT:
                 JdbcStatement statement = (JdbcStatement) job.data;
                 try {
-                    Object result = execute(statement.sql, statement.bindings, statement.wantsGenerated.get());
+                    Object result = execute(conn, statement.sql,
+                            statement.bindings, statement.wantsGenerated.get());
                     offer(new JdbcPacket(result), job.consumer);
                 } catch (SQLException | IllegalArgumentException e) {
                     offer(e, job.consumer);
@@ -275,7 +264,7 @@ class JdbcWorker implements Runnable {
                 List<Object> results = new ArrayList<>(batch.sql.size());
                 for (String s : batch.sql) {
                     try {
-                        Object result = execute(s, null, null);
+                        Object result = execute(conn, s, null, null);
                         results.add(result);
                     } catch (SQLException e) {
                         results.add(e);
@@ -355,27 +344,27 @@ class JdbcWorker implements Runnable {
         log.trace("Process finished: {}", job.job);
     }
 
-    private Object execute(String sql, @Nullable ArrayList<Map<Integer, Object>> bindings,
+    private Object execute(Connection conn, String sql, @Nullable ArrayList<Map<Integer, Object>> bindings,
                            @Nullable String[] keys) throws SQLException {
-        PreparedStatement s = getCachedOrPrepare(sql, keys);
+        PreparedStatement s = getCachedOrPrepare(conn, sql, keys);
         ArrayList<Object> results = new ArrayList<>(bindings == null ? 1 : bindings.size());
         if (bindings == null) {
-            executeSingle(results, s, null);
+            executeSingle(conn, results, s, null);
         } else if (bindings.size() == 0) {
             s.close();
             throw new IllegalArgumentException("No valid statement");
         } else {
             for (Map<Integer, Object> binding : bindings) {
-                executeSingle(results, s, binding);
+                executeSingle(conn, results, s, binding);
             }
         }
         return results;
     }
 
-    private void executeSingle(ArrayList<Object> results, PreparedStatement s,
+    private void executeSingle(Connection conn, ArrayList<Object> results, PreparedStatement s,
                                @Nullable Map<Integer, Object> binding) throws SQLException {
         if (binding != null) {
-            bindStatement(s, binding);
+            bindStatement(conn, s, binding);
         }
         boolean isQuery = s.execute();
         if (isQuery) {
@@ -392,7 +381,9 @@ class JdbcWorker implements Runnable {
         }
     }
 
-    private PreparedStatement getCachedOrPrepare(String sql, @Nullable String[] keys) throws SQLException {
+    private PreparedStatement getCachedOrPrepare(Connection conn,
+                                                 String sql,
+                                                 @Nullable String[] keys) throws SQLException {
         PreparedStatement statement;
         if (keys == null) {
             statement = conn.prepareStatement(sql);
@@ -406,7 +397,9 @@ class JdbcWorker implements Runnable {
         return statement;
     }
 
-    private void bindStatement(PreparedStatement s, Map<Integer, Object> map) throws SQLException {
+    private void bindStatement(Connection conn,
+                               PreparedStatement s,
+                               Map<Integer, Object> map) throws SQLException {
         s.clearParameters();
         for (int i = 0; i < map.size(); i++) {
             s.setObject(i + 1, codec.encode(conn, map.getOrDefault(i, null)));
@@ -421,8 +414,8 @@ class JdbcWorker implements Runnable {
         try {
             codec = initCodec();
         } catch (ClassNotFoundException | ClassCastException
-                | InvocationTargetException | NoSuchMethodException
-                | IllegalAccessException | InstantiationException e) {
+                 | InvocationTargetException | NoSuchMethodException
+                 | IllegalAccessException | InstantiationException e) {
             synchronized (this) {
                 state = State.ENDED;
             }
@@ -444,38 +437,40 @@ class JdbcWorker implements Runnable {
             } catch (InterruptedException ignored) {
             }
         }
-        if (conn != null) {
-            try {
-                conn.commit();
-            } catch (SQLException e) {
-                log.error("Error committing the last commit", e);
-            }
-            try {
-                conn.close();
-            } catch (SQLException e) {
-                log.error("Error closing database", e);
-            }
-        }
+        closeAllConnections();
         closeJobs.forEach(job -> offer(job.consumer));
         closeJobs.clear();
         metadata.set(null);
         log.debug("Exiting");
     }
 
-    public Mono<Void> close() {
-        if (refCount.decrementAndGet() == 0) {
-            if (!shared || pollDuration.isZero()) {
-                return closeNow();
+    private void commitAndClose(Connection connection) throws SQLException {
+        connection.commit();
+        connection.close();
+    }
+
+    private void closeAllConnections() {
+        connections.removeIf(conn -> {
+            try {
+                commitAndClose(conn);
+                return true;
+            } catch (SQLException e) {
+                log.error("Error closing database", e);
+                return false;
             }
-        }
-        return Mono.empty();
+        });
+    }
+
+    public Mono<Void> close(Connection connection) {
+        return JdbcWorker.voidSend(this, connection, JdbcJob.Job.CLOSE_CONNECTION, null);
     }
 
     public Mono<Void> closeNow() {
         return Mono.defer(() -> {
             synchronized (this) {
                 if (state == State.STARTING) {
-                    Mono<Void> voidMono = JdbcWorker.voidSend(this, JdbcJob.Job.CLOSE, null);
+                    Mono<Void> voidMono = JdbcWorker.voidSend(this,
+                            null, JdbcJob.Job.CLOSE, null);
                     state = State.CLOSING;
                     return voidMono;
                 } else {
@@ -493,23 +488,17 @@ class JdbcWorker implements Runnable {
         return state == State.STARTING;
     }
 
-    public Mono<JdbcConnectionMetadata> start() {
-        refCount.incrementAndGet();
-        synchronized (this) {
-            if (state == State.RUNNABLE) {
-                state = State.STARTING;
-                thread.start();
-                return send(this, JdbcJob.Job.INIT, null, packet -> (JdbcConnectionMetadata) packet.data)
-                        .doOnNext(metadata::set);
-            } else if (state == State.STARTING) {
-                return metadata.get();
-            } else {
-                return Mono.error(new IllegalStateException("Thread ended"));
-            }
+    public Mono<JdbcConnectionMetadata> newConnection() {
+        if (state == State.STARTING) {
+            return send(this, null,
+                    JdbcJob.Job.INIT_CONNECTION, null, packet -> (JdbcConnectionMetadata) packet.data)
+                    .doOnNext(metadata::set);
+        } else {
+            return Mono.error(new IllegalStateException("Thread ended"));
         }
     }
 
     enum State {
-        RUNNABLE, STARTING, CLOSING, ENDED,
+        STARTING, CLOSING, ENDED,
     }
 }

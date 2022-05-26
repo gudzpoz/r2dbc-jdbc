@@ -6,13 +6,11 @@ import org.apache.commons.beanutils.ConstructorUtils;
 import org.reactivestreams.Publisher;
 import party.iroiro.r2jdbc.codecs.Converter;
 import party.iroiro.r2jdbc.codecs.DefaultConverter;
-import party.iroiro.r2jdbc.util.QueueDispatcher;
 import reactor.core.publisher.Mono;
 
 import javax.annotation.Nullable;
 import java.lang.reflect.InvocationTargetException;
 import java.time.Duration;
-import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
@@ -21,6 +19,7 @@ import java.util.function.Function;
 @Slf4j
 public class JdbcConnection implements Connection {
     private final AtomicReference<ConnectionMetadata> metadata;
+    private java.sql.Connection connection;
     private final AtomicBoolean autoCommit;
     private final AtomicBoolean valid;
     private final AtomicReference<IsolationLevel> isolationLevel;
@@ -43,10 +42,6 @@ public class JdbcConnection implements Connection {
         }
     }
 
-    JdbcConnection(QueueDispatcher<JdbcPacket> adapter, ConnectionFactoryOptions options) {
-        this(new JdbcWorker(new LinkedBlockingDeque<>(), adapter.subQueue(), options), options);
-    }
-
     private static Converter getConverter(ConnectionFactoryOptions options)
             throws ClassNotFoundException, InvocationTargetException, NoSuchMethodException, IllegalAccessException, InstantiationException {
         if (options.hasOption(JdbcConnectionFactoryProvider.CONV)) {
@@ -63,7 +58,10 @@ public class JdbcConnection implements Connection {
     }
 
     Mono<JdbcConnection> init() {
-        return worker.start().doOnNext(metadata::set).thenReturn(this);
+        return worker.newConnection().doOnNext(newValue -> {
+            metadata.set(newValue);
+            connection = newValue.getConnection();
+        }).thenReturn(this);
     }
 
     Mono<Void> voidSend(JdbcJob.Job job, @Nullable Object data) {
@@ -71,18 +69,18 @@ public class JdbcConnection implements Connection {
         if (!v) {
             return Mono.empty();
         }
-        return JdbcWorker.voidSend(worker, job, data);
+        return JdbcWorker.voidSend(worker, connection, job, data);
     }
 
     boolean offerNow(JdbcJob.Job job, @Nullable Object data, BiConsumer<JdbcPacket, Throwable> consumer) {
-        return JdbcWorker.offerNow(worker, job, data, consumer);
+        return JdbcWorker.offerNow(worker, connection, job, data, consumer);
     }
 
     <T> Mono<T> send(JdbcJob.Job job, @Nullable Object data, Function<JdbcPacket, T> converter) {
         if (!valid.get()) {
             return Mono.empty();
         }
-        return JdbcWorker.send(worker, job, data, converter);
+        return JdbcWorker.send(worker, connection, job, data, converter);
     }
 
     @Override
@@ -99,7 +97,7 @@ public class JdbcConnection implements Connection {
     @Override
     public Mono<Void> close() {
         return Mono.fromRunnable(() ->
-                valid.set(false)).then(Mono.defer(worker::close));
+                valid.set(false)).then(Mono.defer(() -> worker.close(connection)));
     }
 
     @Override

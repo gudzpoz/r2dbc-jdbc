@@ -2,12 +2,14 @@ package party.iroiro.r2jdbc;
 
 import lombok.AllArgsConstructor;
 
+import java.sql.Connection;
 import java.util.function.BiConsumer;
 
 @AllArgsConstructor
 public class JdbcJob {
     enum Job {
-        INIT,
+        INIT_CONNECTION,
+        CLOSE_CONNECTION,
 
         CLOSE,
 
@@ -29,6 +31,7 @@ public class JdbcJob {
 
         BATCH,
     }
+    public final Connection connection;
     public final Job job;
     public final Object data;
     public final BiConsumer<JdbcPacket, Throwable> consumer;
