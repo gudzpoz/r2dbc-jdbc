@@ -25,11 +25,11 @@ It is a toy project, and I promise there will be bugs.
 ## Wait, what?
 
 ```text
-JDBC Connection                                 Reactive
+JDBC Connections                                Reactive
      /|\                                         Access
       |                                             |
 |------------|  Input Jobs (BlockingQueue<>)       \|/
-|    The     |  <--------------------------- Connection(s)
+|    The     |  <--------------------------- R2dbcConnections
 |            |
 |  worker(s) |  --------------------------->   Dispatcher
 |------------|  (LinkedBlockingMultiQueue<>)        |
@@ -64,22 +64,7 @@ Using directly?
 <dependency>
   <groupId>party.iroiro</groupId>
   <artifactId>r2dbc-jdbc</artifactId>
-  <version>0.1.0</version>
-</dependency>
-```
-
-Using with Spring Data:
-
-```xml
-<dependency>
-  <groupId>org.springframework.boot</groupId>
-  <artifactId>spring-boot-starter-data-r2dbc</artifactId>
-</dependency>
-<dependency>
-  <groupId>party.iroiro</groupId>
-  <artifactId>r2dbc-jdbc</artifactId>
-  <version>0.1.0</version>
-  <scope>runtime</scope>
+  <version>0.2.0</version>
 </dependency>
 ```
 
@@ -91,36 +76,56 @@ Using with Spring Data:
 Using directly?
 
 ```groovy
-implementation 'party.iroiro:r2dbc-jdbc:0.1.0'
+implementation 'party.iroiro:r2dbc-jdbc:0.2.0'
 ```
 
-Using with Spring Data:
+</details>
 
-```groovy
-implementation 'org.springframework.boot:spring-boot-starter-data-r2dbc'
-runtimeOnly 'party.iroiro:r2dbc-jdbc:0.1.0'
+### Use with Spring Data
+
+<details>
+<summary>Maven</summary>
+
+```xml
+<dependency>
+  <groupId>org.springframework.boot</groupId>
+  <artifactId>spring-boot-starter-data-r2dbc</artifactId>
+</dependency>
+<dependency>
+  <groupId>party.iroiro</groupId>
+  <artifactId>r2dbc-jdbc</artifactId>
+  <version>0.2.0</version>
+  <scope>runtime</scope>
+</dependency>
 ```
 
 </details>
 
 <details>
-<summary>More On Spring Data</summary>
+<summary>Gradle</summary>
 
-Spring Data requires a `R2dbcDialectProvider` to map repository operations to SQLs. Since different databases may differ in SQL grammar, you may set one matching your database with, for example:
+```groovy
+implementation 'org.springframework.boot:spring-boot-starter-data-r2dbc'
+runtimeOnly 'party.iroiro:r2dbc-jdbc:0.2.0'
+```
+
+</details>
+
+Spring Data requires a `R2dbcDialectProvider` to map repository operations to SQLs.
+Since different databases may differ in SQL grammar, you may set one matching your database with,
+for example:
 
 ```java
 System.setProperty("j2dialect", "org.springframework.data.r2dbc.dialect.H2Dialect");
 ```
 
-Available dialects in Spring Data Reactive are:
+Currently, available dialects in Spring Data Reactive are:
 
 - `org.springframework.data.r2dbc.dialect.H2Dialect`
 - `org.springframework.data.r2dbc.dialect.PostgresDialect`
 - `org.springframework.data.r2dbc.dialect.MySqlDialect`
 - `org.springframework.data.r2dbc.dialect.OracleDialect`
 - `org.springframework.data.r2dbc.dialect.SqlServerDialect`
-
-</details>
 
 ### Passing JDBC urls
 
@@ -146,7 +151,7 @@ class Main {
 }
 ```
 
-We accept four extra options. All the four are optional. 
+We accept some extra options. All are optional. 
 
 <table>
 <tr><th>Option</th><th>Explained</th></tr>
@@ -157,7 +162,7 @@ We accept four extra options. All the four are optional.
 Example: `r2dbc:r2jdbc:h2:///?j2url=jdbc:h2:mem:test`</td>
 <td>Used directly as JDBC url
 
-Default: **Deduce from R2DBC url**</td>
+Default: **Infer from R2DBC url**</td>
 </tr><tr><td>
 
 `JdbcConnectionFactoryProvider.FORWARD`
