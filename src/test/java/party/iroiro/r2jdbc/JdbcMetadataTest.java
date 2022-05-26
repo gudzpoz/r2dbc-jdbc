@@ -39,6 +39,7 @@ public class JdbcMetadataTest {
         JdbcRowMetadata rowMetadata = new JdbcRowMetadata(
                 new ArrayList<>(Collections.singleton(metadata))
         );
+        assertThrows(IndexOutOfBoundsException.class, () -> rowMetadata.getColumnMetadata(-1));
         assertEquals(0, rowMetadata.getColumnIndex("label"));
         assertNotNull(rowMetadata.getColumnMetadata("label"));
         assertTrue(rowMetadata.contains("label"));

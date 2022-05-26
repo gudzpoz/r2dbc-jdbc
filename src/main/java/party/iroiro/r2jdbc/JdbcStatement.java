@@ -115,19 +115,16 @@ public class JdbcStatement implements Statement {
             final HashMap<Integer, Object> bind = new HashMap<>();
             bindings.add(bind);
             fluxes.add(Flux.fromIterable(rawBinding.entrySet())
+                    .filter(entry -> entry.getValue() != null)
                     .flatMap(entry -> {
                         Mono<Object> value = entry.getValue();
-                        if (value == null) {
-                            return Mono.empty();
-                        } else {
-                            return value.doOnNext(o -> bind.put(entry.getKey(), o));
-                        }
+                        return value.doOnNext(o -> bind.put(entry.getKey(), o));
                     }));
         }
         return Flux.merge(fluxes).thenMany(
                 conn.send(JdbcJob.Job.EXECUTE_STATEMENT,
-                        this,
-                        packet -> (ArrayList<?>) packet.data)
+                                this,
+                                packet -> (ArrayList<?>) packet.data)
                         .flatMapMany(list ->
                                 Flux.fromIterable(list)
                                         .map(item -> new JdbcResult(conn, item, conn.getConverter()))));
@@ -147,5 +144,9 @@ public class JdbcStatement implements Statement {
     public Statement fetchSize(int rows) {
         size.set(rows);
         return this;
+    }
+
+    public int getSize() {
+        return size.get();
     }
 }

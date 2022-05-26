@@ -112,12 +112,16 @@ public class JdbcWorkerTest {
         assertException(worker, lock, JdbcJob.Job.VALIDATE, null, SQLException.class);
 
         JdbcStatement statement = new JdbcStatement("", mock(JdbcConnection.class));
+        statement.fetchSize(0);
+        assertException(worker, lock, JdbcJob.Job.EXECUTE_STATEMENT, statement, IllegalArgumentException.class);
         statement.bindings.clear();
         assertException(worker, lock, JdbcJob.Job.EXECUTE_STATEMENT, statement, IllegalArgumentException.class);
 
         ResultSet resultSet = mock(ResultSet.class);
         doThrow(SQLException.class).when(resultSet).close();
         assertException(worker, lock, JdbcJob.Job.CLOSE_RESULT, resultSet, SQLException.class);
+
+        assertException(worker, lock, JdbcJob.Job.RESULT_ROWS, null, JdbcException.class);
 
         lock.lock().block();
         assertFalse(failed.get());

@@ -104,7 +104,6 @@ public class JdbcResult implements Result {
                                 List<?> list = (List<?>) packet.data;
                                 for (Object item : list) {
                                     if (item == null) {
-                                        sink.complete();
                                         break;
                                     }
                                     JdbcRow row = (JdbcRow) item;
@@ -112,6 +111,7 @@ public class JdbcResult implements Result {
                                     row.setConverter(converter);
                                     sink.next(row);
                                 }
+                                sink.complete();
                             } else {
                                 sink.error(exception);
                             }
@@ -140,7 +140,7 @@ public class JdbcResult implements Result {
     }
 
     @Override
-    public Result filter(Predicate<Segment> filter) {
+    public JdbcResult filter(Predicate<Segment> filter) {
         filters.add(filter);
         return this;
     }
@@ -187,7 +187,7 @@ public class JdbcResult implements Result {
         final JdbcRowMetadata columns;
     }
 
-    private static class ResultSetCleaner implements Runnable {
+    static class ResultSetCleaner implements Runnable {
         private final AtomicReference<ResultSet> result;
         private final JdbcConnection conn;
 

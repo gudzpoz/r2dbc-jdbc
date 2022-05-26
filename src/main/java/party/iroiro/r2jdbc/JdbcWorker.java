@@ -251,12 +251,16 @@ class JdbcWorker implements Runnable {
                 break;
             case EXECUTE_STATEMENT:
                 JdbcStatement statement = (JdbcStatement) job.data;
-                try {
-                    Object result = execute(conn, statement.sql,
-                            statement.bindings, statement.wantsGenerated.get());
-                    offer(new JdbcPacket(result), job.consumer);
-                } catch (SQLException | IllegalArgumentException e) {
-                    offer(e, job.consumer);
+                if (statement.getSize() == 0) {
+                    offer(new IllegalArgumentException("Fetch size is either -1 or positive"), job.consumer);
+                } else {
+                    try {
+                        Object result = execute(conn, statement.sql,
+                                statement.bindings, statement.wantsGenerated.get());
+                        offer(new JdbcPacket(result), job.consumer);
+                    } catch (SQLException | IllegalArgumentException e) {
+                        offer(e, job.consumer);
+                    }
                 }
                 break;
             case BATCH:
@@ -467,16 +471,9 @@ class JdbcWorker implements Runnable {
 
     public Mono<Void> closeNow() {
         return Mono.defer(() -> {
-            synchronized (this) {
-                if (state == State.STARTING) {
-                    Mono<Void> voidMono = JdbcWorker.voidSend(this,
-                            null, JdbcJob.Job.CLOSE, null);
-                    state = State.CLOSING;
-                    return voidMono;
-                } else {
-                    return Mono.empty();
-                }
-            }
+            state = State.CLOSING;
+            return JdbcWorker.voidSend(this,
+                    null, JdbcJob.Job.CLOSE, null);
         });
     }
 

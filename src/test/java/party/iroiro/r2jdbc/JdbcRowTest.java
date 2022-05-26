@@ -14,6 +14,7 @@ public class JdbcRowTest {
     public void jdbcRowTest() {
         JdbcRow row = new JdbcRow(new ArrayList<>(Collections.singleton(1024)));
         assertEquals(row, row.row());
+        assertEquals(1024, row.get(0, Integer.class));
         assertThrows(IndexOutOfBoundsException.class, () -> row.get(1, Object.class));
         assertThrows(ClassCastException.class, () -> row.get(0, String.class));
         row.setConverter(new DefaultConverter());

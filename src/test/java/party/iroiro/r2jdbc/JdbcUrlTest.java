@@ -40,6 +40,24 @@ public class JdbcUrlTest {
             ).getUrl();
             assertEquals(url, entry.getValue());
         }
+        assertEquals("jdbc:some::8080/path",
+                JdbcConnectionFactoryProvider.getJdbcConnectionUrl(
+                        ConnectionFactoryOptions.builder()
+                                .option(ConnectionFactoryOptions.DRIVER, "r2jdbc")
+                                .option(ConnectionFactoryOptions.PROTOCOL, "some")
+                                .option(ConnectionFactoryOptions.PORT, 8080)
+                                .option(ConnectionFactoryOptions.DATABASE, "path")
+                                .build()
+                ).getUrl());
+        assertEquals("jdbc:some:host/path",
+                JdbcConnectionFactoryProvider.getJdbcConnectionUrl(
+                        ConnectionFactoryOptions.builder()
+                                .option(ConnectionFactoryOptions.DRIVER, "r2jdbc")
+                                .option(ConnectionFactoryOptions.PROTOCOL, "some")
+                                .option(ConnectionFactoryOptions.HOST, "host")
+                                .option(ConnectionFactoryOptions.DATABASE, "path")
+                                .build()
+                ).getUrl());
     }
 
     @Test
