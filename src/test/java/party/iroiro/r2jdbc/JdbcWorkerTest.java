@@ -9,8 +9,8 @@ import party.iroiro.lock.Lock;
 import party.iroiro.lock.ReactiveLock;
 import party.iroiro.r2jdbc.util.QueueDispatcher;
 import reactor.test.StepVerifier;
+import reactor.util.annotation.Nullable;
 
-import java.lang.reflect.Field;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -20,12 +20,15 @@ import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.BiConsumer;
 
+import static io.r2dbc.spi.ConnectionFactoryOptions.DRIVER;
+import static io.r2dbc.spi.ConnectionFactoryOptions.PROTOCOL;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 @Slf4j
 public class JdbcWorkerTest {
     private final AtomicBoolean failed = new AtomicBoolean(false);
+    Connection connection = getMockingConnection();
 
     @Test
     public void wrongCodecTest() throws InterruptedException {
@@ -36,6 +39,7 @@ public class JdbcWorkerTest {
         JdbcWorker worker = new JdbcWorker(
                 jobs, dispatcher.subQueue(),
                 ConnectionFactoryOptions.builder()
+                        .option(DRIVER, "r2jdbc")
                         .option(JdbcConnectionFactoryProvider.CODEC,
                                 "party.iroiro.r2jdbc.codecs.NonExistent")
                         .build()
@@ -44,7 +48,7 @@ public class JdbcWorkerTest {
         thread.start();
         Thread.sleep(1000);
         assertFalse(thread.isAlive());
-        assertThrows(IllegalStateException.class, worker.start()::block);
+        assertThrows(IllegalStateException.class, worker.newConnection()::block);
     }
 
     @Test
@@ -67,19 +71,18 @@ public class JdbcWorkerTest {
     }
 
     @Test
-    public void workerTest() throws NoSuchFieldException, IllegalAccessException, InterruptedException, SQLException {
+    public void workerTest() throws InterruptedException, SQLException {
         BlockingQueue<JdbcJob> jobs = new LinkedBlockingDeque<>();
         QueueDispatcher<JdbcPacket> dispatcher = new QueueDispatcher<>(
                 new LinkedBlockingMultiQueue<>()
         );
         JdbcWorker worker = new JdbcWorker(
                 jobs, dispatcher.subQueue(),
-                ConnectionFactoryOptions.builder().build()
+                ConnectionFactoryOptions.builder()
+                        .option(DRIVER, "r2jdbc")
+                        .option(PROTOCOL, "h2")
+                        .build()
         );
-        Field field = JdbcWorker.class.getDeclaredField("conn");
-        field.setAccessible(true);
-        Connection connection = getMockingConnection();
-        field.set(worker, connection);
         Thread dispatching = new Thread(dispatcher);
         dispatching.start();
         Thread working = new Thread(worker);
@@ -87,7 +90,8 @@ public class JdbcWorkerTest {
 
         Lock lock = new ReactiveLock();
 
-        assertException(worker, lock, JdbcJob.Job.INIT, null, IllegalStateException.class);
+        assertException(worker, lock, JdbcJob.Job.INIT_CONNECTION, null, SQLException.class);
+        assertException(worker, lock, JdbcJob.Job.CLOSE_CONNECTION, null, SQLException.class);
 
         assertException(worker, lock, JdbcJob.Job.GET_AUTO_COMMIT, null, SQLException.class);
 
@@ -125,10 +129,11 @@ public class JdbcWorkerTest {
     }
 
     private void assertException(JdbcWorker worker, Lock blocker,
-                                 JdbcJob.Job job, Object data,
+                                 JdbcJob.Job job, @Nullable Object data,
                                  Class<? extends Exception> eClass) {
         blocker.lock().block();
-        JdbcWorker.offerNow(worker, job, data, ((packet, exception) -> {
+        log.info("Job: {}", job);
+        JdbcWorker.offerNow(worker, connection, job, data, ((packet, exception) -> {
             try {
                 assertNotNull(exception);
                 assertTrue(eClass.isAssignableFrom(exception.getClass()));
@@ -142,7 +147,8 @@ public class JdbcWorkerTest {
     private void assertNoException(JdbcWorker worker, Lock blocker,
                                    JdbcJob.Job job, Object data) {
         blocker.lock().block();
-        JdbcWorker.offerNow(worker, job, data, ((packet, exception) -> {
+        log.info("Job: {}", job);
+        JdbcWorker.offerNow(worker, connection, job, data, ((packet, exception) -> {
             try {
                 assertNull(exception);
             } catch (Throwable ignored) {
@@ -175,7 +181,7 @@ public class JdbcWorkerTest {
     public void sendTest() {
         JdbcWorker worker = mock(JdbcWorker.class);
         when(worker.notEnded()).thenReturn(false);
-        JdbcWorker.voidSend(worker, JdbcJob.Job.INIT, null).as(StepVerifier::create).verifyError(
+        JdbcWorker.voidSend(worker, null, JdbcJob.Job.INIT_CONNECTION, null).as(StepVerifier::create).verifyError(
                 JdbcException.class
         );
         when(worker.notEnded()).thenReturn(true);
@@ -186,7 +192,7 @@ public class JdbcWorkerTest {
             argument.accept(null, new IllegalArgumentException());
             return true;
         });
-        JdbcWorker.voidSend(worker, JdbcJob.Job.INIT, null).as(StepVerifier::create).verifyError(
+        JdbcWorker.voidSend(worker, null, JdbcJob.Job.INIT_CONNECTION, null).as(StepVerifier::create).verifyError(
                 JdbcException.class
         );
     }

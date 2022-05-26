@@ -45,7 +45,7 @@ final class H2ConnectionFactoryInMemoryTest {
 
         JdbcConnectionFactory connectionFactory = new JdbcConnectionFactory(
                 ConnectionFactoryOptions.parse("r2dbc:r2jdbc:h2~mem:///" + UUID.randomUUID()
-                        + "?j2shared=1&j2wait=1000"));
+                        + ";DB_CLOSE_DELAY=-1"));
 
         runCommand(connectionFactory, "CREATE TABLE lego (id INT);");
         runCommand(connectionFactory, "INSERT INTO lego VALUES(42);");
@@ -76,16 +76,16 @@ final class H2ConnectionFactoryInMemoryTest {
         runCommand(connectionFactory, "CREATE TABLE lego (id INT);");
 
         connectionFactory.close().as(StepVerifier::create).verifyComplete();
-        connectionFactory.create().as(StepVerifier::create).verifyError(IllegalThreadStateException.class);
+        connectionFactory.create().as(StepVerifier::create).verifyError(IllegalStateException.class);
     }
 
     @Test
-    void automaticallyClosesAfterNoConnections() throws InterruptedException {
+    void manuallyClosed() throws InterruptedException {
 
         String database = UUID.randomUUID().toString();
         JdbcConnectionFactory connectionFactory = new JdbcConnectionFactory(
                 ConnectionFactoryOptions.parse(
-                        "r2dbc:r2jdbc:h2~mem:///" + database + "?j2shared=1&j2wait=500"));
+                        "r2dbc:r2jdbc:h2~mem:///" + database));
 
         runCommand(connectionFactory, "CREATE TABLE lego (id INT);");
         JdbcConnection userSession = connectionFactory.create().block();
@@ -95,8 +95,7 @@ final class H2ConnectionFactoryInMemoryTest {
         userSession.close().as(StepVerifier::create).verifyComplete();
 
         assertTrue(worker.isAlive());
-        Thread.sleep(100);
-        assertTrue(worker.isAlive());
+        connectionFactory.close().block();
         Thread.sleep(600);
         assertFalse(worker.isAlive());
     }

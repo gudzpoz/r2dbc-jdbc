@@ -4,6 +4,7 @@ import io.r2dbc.spi.Nullability;
 import org.junit.jupiter.api.Test;
 import party.iroiro.r2jdbc.codecs.DefaultCodec;
 
+import java.sql.Connection;
 import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
 import java.util.ArrayList;
@@ -60,8 +61,9 @@ public class JdbcMetadataTest {
     @Test
     public void connectionMetadata() {
         JdbcConnectionMetadata metadata = new JdbcConnectionMetadata(
-                "H2", "2.1..."
+                mock(Connection.class), "H2", "2.1..."
         );
+        assertNotNull(metadata.getConnection());
         assertEquals("H2", metadata.getDatabaseProductName());
         assertEquals("2.1...", metadata.getDatabaseVersion());
     }

@@ -11,6 +11,7 @@ import reactor.core.publisher.Mono;
 import java.time.Duration;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -51,11 +52,11 @@ public class JdbcConnectionTest {
     @Test
     public void validityTest() {
         JdbcWorker worker = mock(JdbcWorker.class);
-        when(worker.close()).thenReturn(Mono.empty());
+        when(worker.close(any())).thenReturn(Mono.empty());
         JdbcConnection connection = new JdbcConnection(worker, ConnectionFactoryOptions.builder().build());
         connection.close().block();
         assertDoesNotThrow(() ->
-                connection.voidSend(JdbcJob.Job.INIT, null).block(Duration.ofSeconds(1)));
+                connection.voidSend(JdbcJob.Job.INIT_CONNECTION, null).block(Duration.ofSeconds(1)));
         assertDoesNotThrow(() ->
                 connection.beginTransaction().block(Duration.ofSeconds(1)));
         assertDoesNotThrow(() ->
@@ -66,7 +67,7 @@ public class JdbcConnectionTest {
                     }
                 }).block(Duration.ofSeconds(1)));
         assertDoesNotThrow(() ->
-                connection.send(JdbcJob.Job.INIT, null, ignored -> fail())
+                connection.send(JdbcJob.Job.INIT_CONNECTION, null, ignored -> fail())
                         .block(Duration.ofSeconds(1)));
         assertDoesNotThrow(() -> connection.setTransactionIsolationLevel(IsolationLevel.READ_COMMITTED)
                 .timeout(Duration.ofSeconds(1)).block());
@@ -79,7 +80,7 @@ public class JdbcConnectionTest {
     @Test
     public void unimplemented() {
         JdbcWorker worker = mock(JdbcWorker.class);
-        when(worker.close()).thenReturn(Mono.empty());
+        when(worker.close(any())).thenReturn(Mono.empty());
         JdbcConnection connection = new JdbcConnection(worker, ConnectionFactoryOptions.builder().build());
         connection.close().block();
 
