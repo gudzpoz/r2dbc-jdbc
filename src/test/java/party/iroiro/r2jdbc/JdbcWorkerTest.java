@@ -25,6 +25,7 @@ import static io.r2dbc.spi.ConnectionFactoryOptions.PROTOCOL;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
+@SuppressWarnings("SameParameterValue")
 @Slf4j
 public class JdbcWorkerTest {
     private final AtomicBoolean failed = new AtomicBoolean(false);
@@ -123,7 +124,7 @@ public class JdbcWorkerTest {
 
         assertException(worker, lock, JdbcJob.Job.RESULT_ROWS, null, JdbcException.class);
 
-        lock.lock().block();
+        lock.tryLock().mono().block();
         assertFalse(failed.get());
 
         working.interrupt();
@@ -135,7 +136,7 @@ public class JdbcWorkerTest {
     private void assertException(JdbcWorker worker, Lock blocker,
                                  JdbcJob.Job job, @Nullable Object data,
                                  Class<? extends Exception> eClass) {
-        blocker.lock().block();
+        blocker.tryLock().mono().block();
         log.info("Job: {}", job);
         JdbcWorker.offerNow(worker, connection, job, data, ((packet, exception) -> {
             try {
@@ -150,7 +151,7 @@ public class JdbcWorkerTest {
 
     private void assertNoException(JdbcWorker worker, Lock blocker,
                                    JdbcJob.Job job, Object data) {
-        blocker.lock().block();
+        blocker.tryLock().mono().block();
         log.info("Job: {}", job);
         JdbcWorker.offerNow(worker, connection, job, data, ((packet, exception) -> {
             try {

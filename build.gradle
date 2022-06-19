@@ -7,7 +7,7 @@ plugins {
 }
 
 group 'party.iroiro'
-version '0.2.0'
+version '0.2.1-SNAPSHOT'
 
 sourceCompatibility = '1.9'
 targetCompatibility = '1.9'
@@ -37,7 +37,7 @@ dependencies {
     //noinspection GradlePackageUpdate -> TODO: Until Spring Data upgrades to R2DBC-SPI 1.0.0
     implementation "io.r2dbc:r2dbc-spi:$r2dbcSpiVersion"
     implementation "io.projectreactor:reactor-core:$reactorVersion"
-    implementation 'party.iroiro:reactor-locks:0.4.0'
+    implementation 'party.iroiro:reactor-locks:1.0.0'
     implementation 'com.github.marianobarrios:linked-blocking-multi-queue:0.4.0'
     implementation 'commons-beanutils:commons-beanutils:1.9.4'
     implementation "org.slf4j:slf4j-api:$slf4jVersion"
@@ -54,8 +54,8 @@ dependencies {
     testImplementation "io.r2dbc:r2dbc-spi-test:$r2dbcSpiVersion"
     testImplementation 'com.h2database:h2:2.1.212'
     testImplementation 'org.junit.jupiter:junit-jupiter-api:5.8.2'
-    testImplementation 'org.assertj:assertj-core:3.22.0'
-    testImplementation 'org.mockito:mockito-core:4.5.1'
+    testImplementation 'org.assertj:assertj-core:3.23.1'
+    testImplementation 'org.mockito:mockito-core:4.6.1'
     testImplementation "org.slf4j:slf4j-simple:$slf4jVersion"
     testImplementation "org.springframework.boot:spring-boot-starter-jdbc:$springStarterVersion"
     testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.8.2'

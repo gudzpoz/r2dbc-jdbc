@@ -31,14 +31,15 @@ public class JdbcConnectionFactory implements ConnectionFactory, Closeable {
     }
 
     private Mono<Void> init() {
-        return workerLock.lock().doOnSuccess((v) -> {
+        return workerLock.withLock(() -> {
             if (sharedWorker.get() == null) {
                 dispatcher.start();
                 sharedWorker.set(new JdbcWorker(
                         new LinkedBlockingDeque<>(), adapter.subQueue(), options
                 ));
             }
-        }).transform(workerLock::unlockOnTerminate);
+            return Mono.<Void>empty();
+        }).next();
     }
 
     @Override
@@ -57,11 +58,10 @@ public class JdbcConnectionFactory implements ConnectionFactory, Closeable {
     }
 
     public Mono<Void> close() {
-        return workerLock.lock()
-                .then(Mono.fromSupplier(sharedWorker::get))
-                .flatMap(worker -> {
-                    log.debug("Closing factory");
-                    return worker.closeNow().doOnTerminate(dispatcher::interrupt);
-                }).transform(workerLock::unlockOnTerminate);
+        return workerLock.withLock(() -> {
+            JdbcWorker worker = sharedWorker.get();
+            log.debug("Closing factory");
+            return worker.closeNow().doOnTerminate(dispatcher::interrupt);
+        }).next();
     }
 }
