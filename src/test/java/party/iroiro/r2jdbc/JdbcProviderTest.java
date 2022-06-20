@@ -15,7 +15,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 @Slf4j
 public class JdbcProviderTest {
     private ConnectionFactory getFactory() {
-        return ConnectionFactories.get("r2dbc:r2jdbc:h2~:////tmp/test");
+        return ConnectionFactories.get(JdbcStressTest.randomDbUrl());
     }
 
     @Test

@@ -60,9 +60,12 @@ public class JdbcConnectionFactory implements ConnectionFactory, Closeable {
 
     public Mono<Void> close() {
         return workerLock.withLock(() -> {
-            JdbcWorker worker = sharedWorker.get();
             log.debug("Closing factory");
-            return worker.closeNow().doOnTerminate(dispatcher::interrupt);
+            if (sharedWorker.get() != null) {
+                return sharedWorker.get().closeNow().doOnTerminate(dispatcher::interrupt);
+            } else {
+                return Mono.empty();
+            }
         }).next();
     }
 }

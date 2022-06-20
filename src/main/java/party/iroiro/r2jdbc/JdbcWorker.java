@@ -142,15 +142,13 @@ class JdbcWorker implements Runnable {
         JdbcJob job = jobs.take();
         try {
             process(job);
-        } catch (InterruptedException e) {
-            log.error("Unexpected interruption", e);
         } catch (Throwable any) {
             log.error("Unexpected exception", any);
             offer(new JdbcException(any), job.consumer);
         }
     }
 
-    private void process(JdbcJob job) throws InterruptedException {
+    private void process(JdbcJob job) {
         log.trace("Processing: {}", job.job);
         Connection conn = job.connection;
         switch (job.job) {
@@ -480,9 +478,13 @@ class JdbcWorker implements Runnable {
     }
 
     private void shutdown() {
-        JdbcWorker.voidSend(this,
-                null, JdbcJob.Job.CLOSE, null).subscribe();
-        shutdownLock.lock();
+        if (state == State.STARTING) {
+            try {
+                JdbcWorker.voidSend(this, null, JdbcJob.Job.CLOSE, null).subscribe();
+                shutdownLock.lock();
+            } catch (Throwable ignored) {
+            }
+        }
     }
 
     private void commitAndClose(Connection connection) throws SQLException {
@@ -505,11 +507,8 @@ class JdbcWorker implements Runnable {
     }
 
     public Mono<Void> closeNow() {
-        return Mono.defer(() -> {
-            state = State.ENDED;
-            return JdbcWorker.voidSend(this,
-                    null, JdbcJob.Job.CLOSE, null);
-        });
+        return Mono.defer(() -> JdbcWorker.voidSend(this,
+                null, JdbcJob.Job.CLOSE, null));
     }
 
     public BlockingQueue<JdbcJob> getJobQueue() {

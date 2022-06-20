@@ -11,20 +11,32 @@ import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Scheduler;
 import reactor.core.scheduler.Schedulers;
 
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 @Slf4j
 public class JdbcStressTest {
+    public static String randomDbUrl() {
+        Path dir = Paths.get(System.getProperty("java.io.tmpdir")).resolve("j2dbc-test").toAbsolutePath();
+        if (dir.toFile().isDirectory() || dir.toFile().mkdirs()) {
+            return "r2dbc:r2jdbc:h2~:///" + dir.resolve(UUID.randomUUID().toString()).toAbsolutePath();
+        } else {
+            throw new RuntimeException("Failed to make db data folder");
+        }
+    }
+
     @Test
     public void notBatchedStressTest() {
         final int count = 10000;
         final int threads = 8;
         JdbcConnectionFactory factory = (JdbcConnectionFactory)
-                ConnectionFactories.get("r2dbc:r2jdbc:h2~:////tmp/test");
+                ConnectionFactories.get(randomDbUrl());
         long start = System.nanoTime();
         Mono.from(factory.create())
                 .flatMap(this::init)
@@ -56,7 +68,7 @@ public class JdbcStressTest {
         final int count = 10000;
         final int threads = 16;
         JdbcConnectionFactory factory = (JdbcConnectionFactory)
-                ConnectionFactories.get("r2dbc:r2jdbc:h2~:////tmp/test");
+                ConnectionFactories.get(randomDbUrl());
         long start = System.nanoTime();
         long now = Instant.now().toEpochMilli();
         Connection conn = Mono.from(factory.create())
@@ -121,7 +133,7 @@ public class JdbcStressTest {
     @Test
     void transactionTest() {
         JdbcConnectionFactory factory = (JdbcConnectionFactory)
-                ConnectionFactories.get("r2dbc:r2jdbc:h2~:////tmp/test");
+                ConnectionFactories.get(randomDbUrl());
         Mono.from(factory.create())
                 .flatMap(this::init)
                 .flatMapMany(connection -> connection.beginTransaction()

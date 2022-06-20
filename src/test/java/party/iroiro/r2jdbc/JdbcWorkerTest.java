@@ -124,12 +124,13 @@ public class JdbcWorkerTest {
 
         assertException(worker, lock, JdbcJob.Job.RESULT_ROWS, null, JdbcException.class);
 
+        assertNoException(worker, lock, JdbcJob.Job.CLOSE, null);
+
         lock.tryLock().mono().block();
         assertFalse(failed.get());
 
-        working.interrupt();
-        dispatching.interrupt();
         working.join();
+        dispatching.interrupt();
         dispatching.join();
     }
 
@@ -150,7 +151,7 @@ public class JdbcWorkerTest {
     }
 
     private void assertNoException(JdbcWorker worker, Lock blocker,
-                                   JdbcJob.Job job, Object data) {
+                                   JdbcJob.Job job, @Nullable Object data) {
         blocker.tryLock().mono().block();
         log.info("Job: {}", job);
         JdbcWorker.offerNow(worker, connection, job, data, ((packet, exception) -> {
