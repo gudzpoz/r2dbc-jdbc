@@ -26,6 +26,7 @@ public class JdbcConnectionFactory implements ConnectionFactory, Closeable {
         this.options = options;
         this.adapter = new QueueDispatcher<>(new LinkedBlockingMultiQueue<>());
         this.dispatcher = new Thread(this.adapter);
+        this.dispatcher.setDaemon(true);
         sharedWorker = new AtomicReference<>();
         workerLock = new ReactiveLock();
     }

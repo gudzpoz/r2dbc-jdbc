@@ -16,11 +16,9 @@ import reactor.util.annotation.Nullable;
 
 import java.lang.reflect.InvocationTargetException;
 import java.sql.*;
-import java.util.ArrayList;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
 
@@ -35,6 +33,7 @@ class JdbcWorker implements Runnable {
     private State state;
     private Codec codec;
     private final List<Connection> connections;
+    private final ReentrantLock shutdownLock;
 
     JdbcWorker(BlockingQueue<JdbcJob> jobs,
                LinkedBlockingMultiQueue<Integer, QueueItem<JdbcPacket>>.SubQueue out,
@@ -44,12 +43,14 @@ class JdbcWorker implements Runnable {
         this.options = options;
         this.connections = new LinkedList<>();
         Thread thread = new Thread(this);
+        thread.setDaemon(true);
         metadata = new SingletonMono<>();
         codec = null;
         closeJobs = new LinkedList<>();
         state = State.STARTING;
 
         thread.start();
+        shutdownLock = new ReentrantLock();
     }
 
     private static Connection getConnection(ConnectionFactoryOptions options) throws SQLException {
@@ -142,7 +143,7 @@ class JdbcWorker implements Runnable {
         try {
             process(job);
         } catch (InterruptedException e) {
-            throw e;
+            log.error("Unexpected interruption", e);
         } catch (Throwable any) {
             log.error("Unexpected exception", any);
             offer(new JdbcException(any), job.consumer);
@@ -343,7 +344,6 @@ class JdbcWorker implements Runnable {
                     state = State.ENDED;
                 }
                 closeJobs.add(job);
-                throw new InterruptedException("Connection closing");
         }
         log.trace("Process finished: {}", job.job);
     }
@@ -427,42 +427,77 @@ class JdbcWorker implements Runnable {
             return;
         }
 
-        log.debug("Listening");
+        Thread shutdownHook = registerShutdown();
+
         try {
-            while (!Thread.interrupted()) {
-                takeAndProcess();
-            }
-        } catch (InterruptedException ignored) {
-        }
-        log.debug("Cleaning up");
-        while (jobs.peek() != null) {
+            shutdownLock.lock();
+
+            log.debug("Listening");
             try {
-                takeAndProcess();
+                while (state == State.STARTING) {
+                    takeAndProcess();
+                }
             } catch (InterruptedException ignored) {
             }
+            log.debug("Cleaning up");
+            while (jobs.peek() != null) {
+                try {
+                    takeAndProcess();
+                } catch (InterruptedException ignored) {
+                }
+            }
+            closeAllConnections();
+            closeJobs.forEach(job -> offer(job.consumer));
+            closeJobs.clear();
+            metadata.set(null);
+            log.debug("Exiting");
+
+            deregisterShutdown(shutdownHook);
+
+        } finally {
+            shutdownLock.unlock();
         }
-        closeAllConnections();
-        closeJobs.forEach(job -> offer(job.consumer));
-        closeJobs.clear();
-        metadata.set(null);
-        log.debug("Exiting");
+    }
+
+    private void deregisterShutdown(@Nullable Thread shutdownHook) {
+        if (shutdownHook != null) {
+            try {
+                Runtime.getRuntime().removeShutdownHook(shutdownHook);
+            } catch (IllegalStateException ignored) {
+            }
+        }
+    }
+
+    @Nullable
+    private Thread registerShutdown() {
+        Thread shutdownHook = new Thread(this::shutdown);
+        try {
+            Runtime.getRuntime().addShutdownHook(shutdownHook);
+            return shutdownHook;
+        } catch (IllegalStateException e) {
+            return null;
+        }
+    }
+
+    private void shutdown() {
+        JdbcWorker.voidSend(this,
+                null, JdbcJob.Job.CLOSE, null).subscribe();
+        shutdownLock.lock();
     }
 
     private void commitAndClose(Connection connection) throws SQLException {
-        connection.commit();
         connection.close();
     }
 
     private void closeAllConnections() {
-        connections.removeIf(conn -> {
+        for (Connection conn : connections) {
             try {
                 commitAndClose(conn);
-                return true;
             } catch (SQLException e) {
                 log.error("Error closing database", e);
-                return false;
             }
-        });
+        }
+        connections.clear();
     }
 
     public Mono<Void> close(Connection connection) {
@@ -471,7 +506,7 @@ class JdbcWorker implements Runnable {
 
     public Mono<Void> closeNow() {
         return Mono.defer(() -> {
-            state = State.CLOSING;
+            state = State.ENDED;
             return JdbcWorker.voidSend(this,
                     null, JdbcJob.Job.CLOSE, null);
         });
@@ -496,6 +531,6 @@ class JdbcWorker implements Runnable {
     }
 
     enum State {
-        STARTING, CLOSING, ENDED,
+        STARTING, ENDED,
     }
 }
