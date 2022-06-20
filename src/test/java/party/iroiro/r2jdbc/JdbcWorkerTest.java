@@ -29,7 +29,7 @@ import static org.mockito.Mockito.*;
 @Slf4j
 public class JdbcWorkerTest {
     private final AtomicBoolean failed = new AtomicBoolean(false);
-    Connection connection = getMockingConnection();
+    Connection connection = null;
 
     @Test
     public void wrongCodecTest() throws InterruptedException {
@@ -70,7 +70,30 @@ public class JdbcWorkerTest {
     }
 
     @Test
-    public void workerTest() throws InterruptedException, SQLException {
+    public void incorrectCodecClassTest() throws InterruptedException {
+        BlockingQueue<JdbcJob> jobs = new LinkedBlockingDeque<>();
+        QueueDispatcher<JdbcPacket> dispatcher = new QueueDispatcher<>(
+                new LinkedBlockingMultiQueue<>()
+        );
+        JdbcWorker worker = new JdbcWorker(
+                jobs, dispatcher.subQueue(),
+                ConnectionFactoryOptions.builder()
+                        .option(JdbcConnectionFactoryProvider.CODEC,
+                                "java.lang.Object")
+                        .build()
+        );
+        Thread.sleep(1000);
+        assertFalse(worker.isAlive());
+    }
+
+    @Test
+    public void workerTest() throws SQLException, InterruptedException {
+        workerTest(false);
+        workerTest(true);
+    }
+
+    private void workerTest(boolean randomFailures) throws InterruptedException, SQLException {
+        this.connection = getMockingConnection(randomFailures);
         BlockingQueue<JdbcJob> jobs = new LinkedBlockingDeque<>();
         QueueDispatcher<JdbcPacket> dispatcher = new QueueDispatcher<>(
                 new LinkedBlockingMultiQueue<>()
@@ -105,7 +128,11 @@ public class JdbcWorkerTest {
         assertNoException(worker, lock, JdbcJob.Job.SET_ISOLATION_LEVEL, IsolationLevel.READ_COMMITTED);
         assertNoException(worker, lock, JdbcJob.Job.SET_ISOLATION_LEVEL, IsolationLevel.READ_UNCOMMITTED);
         assertNoException(worker, lock, JdbcJob.Job.SET_ISOLATION_LEVEL, IsolationLevel.REPEATABLE_READ);
-        assertException(worker, lock, JdbcJob.Job.SET_ISOLATION_LEVEL, IsolationLevel.SERIALIZABLE, SQLException.class);
+        if (randomFailures) {
+            assertException(worker, lock, JdbcJob.Job.SET_ISOLATION_LEVEL, IsolationLevel.SERIALIZABLE, SQLException.class);
+        } else {
+            assertNoException(worker, lock, JdbcJob.Job.SET_ISOLATION_LEVEL, IsolationLevel.SERIALIZABLE);
+        }
         assertException(worker, lock, JdbcJob.Job.SET_ISOLATION_LEVEL, null, IllegalArgumentException.class);
 
         assertException(worker, lock, JdbcJob.Job.VALIDATE, null, SQLException.class);
@@ -119,8 +146,9 @@ public class JdbcWorkerTest {
         ResultSet resultSet = mock(ResultSet.class);
         doThrow(SQLException.class).when(resultSet).close();
         assertException(worker, lock, JdbcJob.Job.CLOSE_RESULT, resultSet, SQLException.class);
-
-        assertException(worker, lock, JdbcJob.Job.RESULT_ROWS, null, JdbcException.class);
+        JdbcResult.JdbcResultRequest request = new JdbcResult.JdbcResultRequest(null, 0, null);
+        assertException(worker, lock, JdbcJob.Job.RESULT_ROWS, request, JdbcException.class);
+        assertException(worker, lock, JdbcJob.Job.RESULT_METADATA, null, JdbcException.class);
 
         assertNoException(worker, lock, JdbcJob.Job.CLOSE, null);
 
@@ -141,7 +169,8 @@ public class JdbcWorkerTest {
             try {
                 assertNotNull(exception);
                 assertTrue(eClass.isAssignableFrom(exception.getClass()));
-            } catch (Throwable ignored) {
+            } catch (Throwable e) {
+                log.error("Test failed: Expecting exception {}", eClass.getName());
                 failed.set(true);
             }
             blocker.unlock();
@@ -155,14 +184,15 @@ public class JdbcWorkerTest {
         JdbcWorker.offerNow(worker, connection, job, data, ((packet, exception) -> {
             try {
                 assertNull(exception);
-            } catch (Throwable ignored) {
+            } catch (Throwable e) {
+                log.error("Test failed: Unexpected exception", exception);
                 failed.set(true);
             }
             blocker.unlock();
         }));
     }
 
-    private Connection getMockingConnection() {
+    private Connection getMockingConnection(boolean randomFailures) {
         Connection connection = mock(Connection.class);
         try {
             doThrow(SQLException.class).when(connection).getAutoCommit();
@@ -170,8 +200,10 @@ public class JdbcWorkerTest {
             doThrow(SQLException.class).when(connection).setAutoCommit(false);
             doThrow(SQLException.class).when(connection).commit();
             doThrow(SQLException.class).when(connection).rollback();
-            doThrow(SQLException.class).when(connection)
-                    .setTransactionIsolation(Connection.TRANSACTION_SERIALIZABLE);
+            if (randomFailures) {
+                doThrow(SQLException.class).when(connection)
+                        .setTransactionIsolation(Connection.TRANSACTION_SERIALIZABLE);
+            }
             doThrow(SQLException.class).when(connection).isValid(0);
             doThrow(SQLException.class).when(connection).close();
             when(connection.prepareStatement(any())).thenReturn(mock(PreparedStatement.class));

@@ -1,14 +1,12 @@
 package party.iroiro.r2jdbc;
 
-import io.r2dbc.spi.ConnectionFactoryOptions;
-import io.r2dbc.spi.IsolationLevel;
-import io.r2dbc.spi.Option;
-import io.r2dbc.spi.TransactionDefinition;
+import io.r2dbc.spi.*;
 import org.junit.jupiter.api.Test;
 import party.iroiro.r2jdbc.codecs.DefaultConverter;
 import reactor.core.publisher.Mono;
 
 import java.time.Duration;
+import java.util.Objects;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -48,6 +46,32 @@ public class JdbcConnectionTest {
                 instanceof CustomConverter);
     }
 
+    @Test
+    public void multipleConnectionsTest() {
+        JdbcConnectionFactory factory = (JdbcConnectionFactory)
+                ConnectionFactories.get(JdbcStressTest.randomDbUrl());
+        JdbcConnection conn1 = Objects.requireNonNull(factory.create().block());
+        JdbcConnection conn2 = Objects.requireNonNull(factory.create().block());
+
+        conn1.createStatement("create table test_t (id bigint primary key)").execute().blockLast();
+
+        conn1.beginTransaction().block();
+        conn2.beginTransaction().block();
+        conn1.createStatement("insert into test_t values (1024)").execute().blockLast();
+
+        assertEquals(0, Objects.requireNonNull(conn2.createStatement("select COUNT(*) from test_t where id = 1024").execute()
+                        .blockLast())
+                .map((row, rowMetadata) -> row.get(0, Integer.class)).blockLast());
+
+        conn1.commitTransaction().block();
+
+        assertEquals(1, Objects.requireNonNull(conn2.createStatement("select COUNT(*) from test_t where id = 1024").execute()
+                        .blockLast())
+                .map((row, rowMetadata) -> row.get(0, Integer.class)).blockLast());
+
+        conn1.close().block();
+        conn2.close().block();
+    }
 
     @Test
     public void validityTest() {
