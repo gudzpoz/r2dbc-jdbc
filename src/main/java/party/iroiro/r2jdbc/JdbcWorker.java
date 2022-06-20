@@ -480,7 +480,7 @@ class JdbcWorker implements Runnable {
     private void shutdown() {
         if (state == State.STARTING) {
             try {
-                JdbcWorker.voidSend(this, null, JdbcJob.Job.CLOSE, null).subscribe();
+                offerNow(this, null, JdbcJob.Job.CLOSE, null, (a, b) -> {});
                 shutdownLock.lock();
             } catch (Throwable ignored) {
             }

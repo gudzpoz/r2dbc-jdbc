@@ -65,10 +65,8 @@ public class JdbcWorkerTest {
                                 "party.iroiro.r2jdbc.codecs.DefaultCodec")
                         .build()
         );
-        Thread thread = new Thread(worker);
-        thread.start();
         Thread.sleep(1000);
-        assertTrue(thread.isAlive());
+        assertTrue(worker.isAlive());
     }
 
     @Test
