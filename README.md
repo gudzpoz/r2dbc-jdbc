@@ -64,7 +64,7 @@ Using directly?
 <dependency>
   <groupId>party.iroiro</groupId>
   <artifactId>r2dbc-jdbc</artifactId>
-  <version>0.2.1</version>
+  <version>0.2.2</version>
 </dependency>
 ```
 
@@ -76,7 +76,7 @@ Using directly?
 Using directly?
 
 ```groovy
-implementation 'party.iroiro:r2dbc-jdbc:0.2.1'
+implementation 'party.iroiro:r2dbc-jdbc:0.2.2'
 ```
 
 </details>
@@ -94,7 +94,7 @@ implementation 'party.iroiro:r2dbc-jdbc:0.2.1'
 <dependency>
   <groupId>party.iroiro</groupId>
   <artifactId>r2dbc-jdbc</artifactId>
-  <version>0.2.1</version>
+  <version>0.2.2</version>
   <scope>runtime</scope>
 </dependency>
 ```
@@ -106,7 +106,7 @@ implementation 'party.iroiro:r2dbc-jdbc:0.2.1'
 
 ```groovy
 implementation 'org.springframework.boot:spring-boot-starter-data-r2dbc'
-runtimeOnly 'party.iroiro:r2dbc-jdbc:0.2.1'
+runtimeOnly 'party.iroiro:r2dbc-jdbc:0.2.2'
 ```
 
 </details>
