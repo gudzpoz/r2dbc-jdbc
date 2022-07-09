@@ -3,7 +3,9 @@ package party.iroiro.r2jdbc.codecs;
 import io.r2dbc.spi.Parameter;
 import reactor.util.annotation.Nullable;
 
-import java.io.*;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.math.BigDecimal;
 import java.nio.ByteBuffer;
 import java.nio.channels.Channels;
@@ -78,8 +80,8 @@ public class DefaultCodec implements Codec {
             throws UnsupportedOperationException, SQLException {
         if (object instanceof Clob) {
             byte[] bytes;
-            try {
-                bytes = ((Clob) object).getAsciiStream().readAllBytes();
+            try (InputStream asciiStream = ((Clob) object).getAsciiStream()) {
+                bytes = asciiStream.readAllBytes();
             } catch (IOException e) {
                 throw new SQLException(e);
             }
@@ -88,8 +90,8 @@ public class DefaultCodec implements Codec {
 
         if (object instanceof Blob) {
             byte[] bytes;
-            try {
-                bytes = ((Blob) object).getBinaryStream().readAllBytes();
+            try (InputStream binaryStream = ((Blob) object).getBinaryStream()) {
+                bytes = binaryStream.readAllBytes();
             } catch (IOException e) {
                 throw new SQLException(e);
             }
@@ -121,10 +123,8 @@ public class DefaultCodec implements Codec {
             return clob;
         } else if (object instanceof JdbcBlob) {
             Blob blob = connection.createBlob();
-            try {
-                OutputStream outputStream = blob.setBinaryStream(1);
+            try (OutputStream outputStream = blob.setBinaryStream(1)) {
                 Channels.newChannel(outputStream).write(((JdbcBlob) object).getBuffer());
-                outputStream.close();
             } catch (IOException e) {
                 throw new SQLException(e);
             }
