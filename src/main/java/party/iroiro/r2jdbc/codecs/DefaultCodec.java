@@ -102,6 +102,12 @@ public class DefaultCodec implements Codec {
             return ByteBuffer.wrap((byte[]) object);
         }
 
+        if (object instanceof Array) {
+            Object array = ((Array) object).getArray();
+            ((Array) object).free();
+            return array;
+        }
+
         return object;
     }
 
@@ -130,7 +136,20 @@ public class DefaultCodec implements Codec {
             }
             return blob;
         } else {
+            Class<?> aClass = object.getClass();
+            if (aClass.isArray() && aClass.getComponentType().isPrimitive()) {
+                return boxedArray(object);
+            }
             return object;
         }
+    }
+
+    protected Object[] boxedArray(Object object) {
+        int length = java.lang.reflect.Array.getLength(object);
+        Object[] objects = new Object[length];
+        for (int i = 0; i < length; i++) {
+            objects[i] = java.lang.reflect.Array.get(object, i);
+        }
+        return objects;
     }
 }

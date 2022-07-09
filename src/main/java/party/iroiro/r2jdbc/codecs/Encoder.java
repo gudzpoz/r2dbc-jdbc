@@ -1,5 +1,7 @@
 package party.iroiro.r2jdbc.codecs;
 
+import reactor.util.annotation.Nullable;
+
 import java.sql.Connection;
 import java.sql.SQLException;
 
@@ -17,6 +19,7 @@ public interface Encoder {
      * @throws UnsupportedOperationException if unsupported
      * @throws SQLException if SQL errors occur (e.g. during {@link java.sql.Clob} creation)
      */
+    @Nullable
     <T> Object encode(Connection connection, T object)
             throws UnsupportedOperationException, SQLException;
 }

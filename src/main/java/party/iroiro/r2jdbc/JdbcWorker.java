@@ -315,7 +315,7 @@ class JdbcWorker implements Runnable {
                         for (int j = 0; j < columns; j++) {
                             ColumnMetadata meta = metadata.get(j);
                             Class<?> type = (Class<?>) meta.getNativeTypeMetadata();
-                            if (type == null) {
+                            if (type == null || type.isArray()) {
                                 rowData.add(codec.decode(row.getObject(j + 1), meta.getJavaType()));
                             } else {
                                 rowData.add(codec.decode(row.getObject(j + 1, type), meta.getJavaType()));
