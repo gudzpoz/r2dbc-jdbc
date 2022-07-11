@@ -135,6 +135,17 @@ public class DefaultCodec implements Codec {
                 throw new SQLException(e);
             }
             return blob;
+        } else if (object instanceof byte[]){
+            return object;
+        } else if (object instanceof ByteBuffer) {
+            ByteBuffer buffer = (ByteBuffer) object;
+            if (buffer.hasArray()) {
+                return buffer.array();
+            } else {
+                byte[] bytes = new byte[buffer.remaining()];
+                buffer.get(bytes);
+                return bytes;
+            }
         } else {
             Class<?> aClass = object.getClass();
             if (aClass.isArray() && aClass.getComponentType().isPrimitive()) {
