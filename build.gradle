@@ -18,7 +18,7 @@ repositories {
 
 ext {
     r2dbcSpiVersion = '0.9.1.RELEASE'
-    reactorVersion = '3.4.19'
+    reactorVersion = '3.4.21'
     slf4jVersion = '1.7.36'
     lombokVersion = '1.18.24'
     springStarterVersion = '2.7.0'
