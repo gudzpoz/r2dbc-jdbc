@@ -21,7 +21,7 @@ ext {
     reactorVersion = '3.4.19'
     slf4jVersion = '1.7.36'
     lombokVersion = '1.18.24'
-    springStarterVersion = '2.7.0'
+    springStarterVersion = '2.7.2'
 }
 
 java {
