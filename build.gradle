@@ -18,10 +18,10 @@ repositories {
 
 ext {
     r2dbcSpiVersion = '0.9.1.RELEASE'
-    reactorVersion = '3.4.19'
+    reactorVersion = '3.4.22'
     slf4jVersion = '1.7.36'
     lombokVersion = '1.18.24'
-    springStarterVersion = '2.7.0'
+    springStarterVersion = '2.7.3'
 }
 
 java {
@@ -53,11 +53,11 @@ dependencies {
     //noinspection GradlePackageUpdate -> TODO: Until Spring Data upgrades to R2DBC-SPI 1.0.0
     testImplementation "io.r2dbc:r2dbc-spi-test:$r2dbcSpiVersion"
     testImplementation 'com.h2database:h2:2.1.214'
-    testImplementation 'org.junit.jupiter:junit-jupiter-api:5.8.2'
+    testImplementation 'org.junit.jupiter:junit-jupiter-api:5.9.0'
     testImplementation 'org.assertj:assertj-core:3.23.1'
-    testImplementation 'org.mockito:mockito-core:4.6.1'
+    testImplementation 'org.mockito:mockito-core:4.7.0'
     testImplementation "org.springframework.boot:spring-boot-starter-jdbc:$springStarterVersion"
-    testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.8.2'
+    testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.9.0'
 }
 
 test {
