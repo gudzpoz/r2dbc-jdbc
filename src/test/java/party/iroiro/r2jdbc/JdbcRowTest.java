@@ -1,5 +1,6 @@
 package party.iroiro.r2jdbc;
 
+import io.r2dbc.spi.RowMetadata;
 import org.junit.jupiter.api.Test;
 import party.iroiro.r2jdbc.codecs.DefaultConverter;
 
@@ -21,7 +22,10 @@ public class JdbcRowTest {
         assertEquals("1024", row.get(0, String.class));
 
         assertThrows(NullPointerException.class, row::getMetadata);
-        row.setMetadata(mock(JdbcRowMetadata.class));
-        assertNotNull(row.getMetadata());
+        JdbcColumnMetadata mockColumnMetadata = mock(JdbcColumnMetadata.class);
+        row.setMetadata(new JdbcRowMetadata(new ArrayList<>(Collections.singleton(mockColumnMetadata))));
+        RowMetadata metadata = row.getMetadata();
+        assertNotNull(metadata);
+        assertSame(mockColumnMetadata, metadata.getColumnMetadata(0));
     }
 }

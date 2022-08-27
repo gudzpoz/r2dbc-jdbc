@@ -8,6 +8,7 @@ import party.iroiro.lock.Lock;
 import party.iroiro.lock.ReactiveLock;
 import party.iroiro.r2jdbc.util.QueueDispatcher;
 import party.iroiro.r2jdbc.util.SemiBlockingQueue;
+import reactor.core.publisher.Sinks;
 import reactor.test.StepVerifier;
 import reactor.util.annotation.Nullable;
 
@@ -219,5 +220,39 @@ public class JdbcWorkerTest {
         JdbcWorker.voidSend(worker, null, JdbcJob.Job.INIT_CONNECTION, null).as(StepVerifier::create).verifyError(
                 JdbcException.class
         );
+    }
+
+    @Test
+    public void exceptionJobTest() throws SQLException {
+        SemiBlockingQueue<JdbcJob> jobs = new SemiBlockingQueue<>();
+        QueueDispatcher<JdbcPacket> dispatcher = new QueueDispatcher<>();
+        new Thread(dispatcher).start();
+        new JdbcWorker(
+                jobs, dispatcher.subQueue(), ConnectionFactoryOptions.builder().build()
+        );
+        Sinks.One<Throwable> sink = Sinks.one();
+        jobs.offer(new JdbcJob(null, null, null, (p, e) -> sink.tryEmitValue(e)));
+        Throwable throwable = sink.asMono().block();
+        assertNotNull(throwable);
+        assertInstanceOf(JdbcException.class, throwable);
+        assertInstanceOf(NullPointerException.class, throwable.getCause());
+
+        ResultSet mockResult = mock(ResultSet.class);
+        when(mockResult.getMetaData()).thenThrow(SQLException.class);
+        Sinks.One<Throwable> sqlError = Sinks.one();
+        jobs.offer(new JdbcJob(null, JdbcJob.Job.RESULT_METADATA, mockResult,
+                (p, e) -> sqlError.tryEmitValue(e)));
+        Throwable sqlE = sqlError.asMono().block();
+        assertInstanceOf(SQLException.class, sqlE);
+
+        //noinspection resource
+        Connection mockConn = mock(Connection.class);
+        when(mockConn.prepareStatement(any())).thenThrow(SQLException.class);
+        Sinks.One<Throwable> sqlError2 = Sinks.one();
+        JdbcBatch jdbcBatch = new JdbcBatch(mock(JdbcConnection.class));
+        jobs.offer(new JdbcJob(connection, JdbcJob.Job.BATCH, jdbcBatch.add(""),
+                (p, e) -> sqlError2.tryEmitValue(e)));
+        Throwable sqlE2 = sqlError.asMono().block();
+        assertInstanceOf(SQLException.class, sqlE2);
     }
 }

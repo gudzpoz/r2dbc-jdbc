@@ -52,6 +52,15 @@ public class DefaultCodecTest {
         assertTrue(codec.decode(new byte[1], Object.class) instanceof ByteBuffer);
     }
 
+    @SuppressWarnings("ConstantConditions")
+    @Test
+    public void defaultCodecEncodeArray() throws SQLException {
+        DefaultCodec codec = new DefaultCodec();
+        assertInstanceOf(Object[].class, codec.encode(null, new int[0]));
+        assertInstanceOf(Integer[].class, codec.encode(null, new Integer[0]));
+        assertInstanceOf(byte[].class, codec.encode(null, new byte[0]));
+    }
+
     @Test
     public void defaultCodecEncodeParameter() throws SQLException {
         DefaultCodec codec = new DefaultCodec();

@@ -115,7 +115,6 @@ public class JdbcStatement implements Statement {
             final HashMap<Integer, Object> bind = new HashMap<>();
             bindings.add(bind);
             fluxes.add(Flux.fromIterable(rawBinding.entrySet())
-                    .filter(entry -> entry.getValue() != null)
                     .flatMap(entry -> {
                         Mono<Object> value = entry.getValue();
                         return value.doOnNext(o -> bind.put(entry.getKey(), o));
