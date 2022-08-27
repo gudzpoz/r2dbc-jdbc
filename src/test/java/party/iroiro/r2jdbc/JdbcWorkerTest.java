@@ -2,12 +2,12 @@ package party.iroiro.r2jdbc;
 
 import io.r2dbc.spi.ConnectionFactoryOptions;
 import io.r2dbc.spi.IsolationLevel;
-import lbmq.LinkedBlockingMultiQueue;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.Test;
 import party.iroiro.lock.Lock;
 import party.iroiro.lock.ReactiveLock;
 import party.iroiro.r2jdbc.util.QueueDispatcher;
+import party.iroiro.r2jdbc.util.SemiBlockingQueue;
 import reactor.test.StepVerifier;
 import reactor.util.annotation.Nullable;
 
@@ -15,8 +15,6 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.BiConsumer;
 
@@ -33,10 +31,8 @@ public class JdbcWorkerTest {
 
     @Test
     public void wrongCodecTest() throws InterruptedException {
-        BlockingQueue<JdbcJob> jobs = new LinkedBlockingDeque<>();
-        QueueDispatcher<JdbcPacket> dispatcher = new QueueDispatcher<>(
-                new LinkedBlockingMultiQueue<>()
-        );
+        SemiBlockingQueue<JdbcJob> jobs = new SemiBlockingQueue<>();
+        QueueDispatcher<JdbcPacket> dispatcher = new QueueDispatcher<>();
         JdbcWorker worker = new JdbcWorker(
                 jobs, dispatcher.subQueue(),
                 ConnectionFactoryOptions.builder()
@@ -54,10 +50,8 @@ public class JdbcWorkerTest {
 
     @Test
     public void codecTest() throws InterruptedException {
-        BlockingQueue<JdbcJob> jobs = new LinkedBlockingDeque<>();
-        QueueDispatcher<JdbcPacket> dispatcher = new QueueDispatcher<>(
-                new LinkedBlockingMultiQueue<>()
-        );
+        SemiBlockingQueue<JdbcJob> jobs = new SemiBlockingQueue<>();
+        QueueDispatcher<JdbcPacket> dispatcher = new QueueDispatcher<>();
         JdbcWorker worker = new JdbcWorker(
                 jobs, dispatcher.subQueue(),
                 ConnectionFactoryOptions.builder()
@@ -71,10 +65,8 @@ public class JdbcWorkerTest {
 
     @Test
     public void incorrectCodecClassTest() throws InterruptedException {
-        BlockingQueue<JdbcJob> jobs = new LinkedBlockingDeque<>();
-        QueueDispatcher<JdbcPacket> dispatcher = new QueueDispatcher<>(
-                new LinkedBlockingMultiQueue<>()
-        );
+        SemiBlockingQueue<JdbcJob> jobs = new SemiBlockingQueue<>();
+        QueueDispatcher<JdbcPacket> dispatcher = new QueueDispatcher<>();
         JdbcWorker worker = new JdbcWorker(
                 jobs, dispatcher.subQueue(),
                 ConnectionFactoryOptions.builder()
@@ -94,12 +86,9 @@ public class JdbcWorkerTest {
 
     private void workerTest(boolean randomFailures) throws InterruptedException, SQLException {
         this.connection = getMockingConnection(randomFailures);
-        BlockingQueue<JdbcJob> jobs = new LinkedBlockingDeque<>();
-        QueueDispatcher<JdbcPacket> dispatcher = new QueueDispatcher<>(
-                new LinkedBlockingMultiQueue<>()
-        );
+        QueueDispatcher<JdbcPacket> dispatcher = new QueueDispatcher<>();
         JdbcWorker worker = new JdbcWorker(
-                jobs, dispatcher.subQueue(),
+                new SemiBlockingQueue<>(), dispatcher.subQueue(),
                 ConnectionFactoryOptions.builder()
                         .option(DRIVER, "r2jdbc")
                         .option(PROTOCOL, "h2")
@@ -107,8 +96,7 @@ public class JdbcWorkerTest {
         );
         Thread dispatching = new Thread(dispatcher);
         dispatching.start();
-        Thread working = new Thread(worker);
-        working.start();
+        Thread.sleep(1000);
 
         Lock lock = new ReactiveLock();
 
@@ -155,8 +143,7 @@ public class JdbcWorkerTest {
         lock.tryLock().mono().block();
         assertFalse(failed.get());
 
-        working.join();
-        dispatching.interrupt();
+        QueueDispatcher.interrupt(dispatching);
         dispatching.join();
     }
 
@@ -222,12 +209,13 @@ public class JdbcWorkerTest {
         );
         when(worker.notEnded()).thenReturn(true);
         //noinspection unchecked
-        when(worker.getJobQueue()).thenReturn(mock(BlockingQueue.class));
-        when(worker.getJobQueue().offer(any())).thenAnswer(invocation -> {
+        SemiBlockingQueue<JdbcJob> mockQueue = mock(SemiBlockingQueue.class);
+        when(worker.getJobQueue()).thenReturn(mockQueue);
+        doAnswer(invocation -> {
             BiConsumer<JdbcPacket, Throwable> argument = invocation.getArgument(0, JdbcJob.class).consumer;
             argument.accept(null, new IllegalArgumentException());
-            return true;
-        });
+            return null;
+        }).when(mockQueue).offer(any());
         JdbcWorker.voidSend(worker, null, JdbcJob.Job.INIT_CONNECTION, null).as(StepVerifier::create).verifyError(
                 JdbcException.class
         );

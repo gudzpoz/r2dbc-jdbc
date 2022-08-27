@@ -3,30 +3,31 @@ package party.iroiro.r2jdbc;
 import io.r2dbc.spi.ColumnMetadata;
 import io.r2dbc.spi.ConnectionFactoryOptions;
 import io.r2dbc.spi.IsolationLevel;
-import lbmq.LinkedBlockingMultiQueue;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.beanutils.ConstructorUtils;
 import party.iroiro.r2jdbc.codecs.Codec;
 import party.iroiro.r2jdbc.codecs.DefaultCodec;
 import party.iroiro.r2jdbc.util.Pair;
 import party.iroiro.r2jdbc.util.QueueItem;
+import party.iroiro.r2jdbc.util.SemiBlockingQueue;
 import party.iroiro.r2jdbc.util.SingletonMono;
 import reactor.core.publisher.Mono;
 import reactor.util.annotation.Nullable;
 
 import java.lang.reflect.InvocationTargetException;
 import java.sql.*;
-import java.util.*;
-import java.util.concurrent.BlockingQueue;
+import java.util.ArrayList;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
 
 @Slf4j
 class JdbcWorker implements Runnable {
-
-    private final BlockingQueue<JdbcJob> jobs;
-    private final LinkedBlockingMultiQueue<Integer, QueueItem<JdbcPacket>>.SubQueue out;
+    private final SemiBlockingQueue<JdbcJob> jobs;
+    private final SemiBlockingQueue<QueueItem<JdbcPacket>> out;
     private final ConnectionFactoryOptions options;
     private final SingletonMono<JdbcConnectionMetadata> metadata;
     private final List<JdbcJob> closeJobs;
@@ -35,8 +36,8 @@ class JdbcWorker implements Runnable {
     private final List<Connection> connections;
     private final ReentrantLock shutdownLock;
 
-    JdbcWorker(BlockingQueue<JdbcJob> jobs,
-               LinkedBlockingMultiQueue<Integer, QueueItem<JdbcPacket>>.SubQueue out,
+    JdbcWorker(SemiBlockingQueue<JdbcJob> jobs,
+               SemiBlockingQueue<QueueItem<JdbcPacket>> out,
                ConnectionFactoryOptions options) {
         this.jobs = jobs;
         this.out = out;
@@ -82,7 +83,8 @@ class JdbcWorker implements Runnable {
                             BiConsumer<JdbcPacket, Throwable> consumer) {
         if (worker.notEnded()) {
             // FIXME: Edge cases
-            return worker.getJobQueue().offer(new JdbcJob(connection, job, data, consumer));
+            worker.getJobQueue().offer(new JdbcJob(connection, job, data, consumer));
+            return true;
         } else {
             return false;
         }
@@ -411,6 +413,7 @@ class JdbcWorker implements Runnable {
     @Override
     public void run() {
         Thread current = Thread.currentThread();
+        jobs.setConsumer(current);
         current.setName("R2jdbcWorker-" + current.getId());
 
         try {
@@ -511,7 +514,7 @@ class JdbcWorker implements Runnable {
                 null, JdbcJob.Job.CLOSE, null));
     }
 
-    public BlockingQueue<JdbcJob> getJobQueue() {
+    public SemiBlockingQueue<JdbcJob> getJobQueue() {
         return jobs;
     }
 

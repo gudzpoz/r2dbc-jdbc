@@ -4,14 +4,13 @@ import io.r2dbc.spi.Closeable;
 import io.r2dbc.spi.ConnectionFactory;
 import io.r2dbc.spi.ConnectionFactoryMetadata;
 import io.r2dbc.spi.ConnectionFactoryOptions;
-import lbmq.LinkedBlockingMultiQueue;
 import lombok.extern.slf4j.Slf4j;
 import party.iroiro.lock.Lock;
 import party.iroiro.lock.ReactiveLock;
 import party.iroiro.r2jdbc.util.QueueDispatcher;
+import party.iroiro.r2jdbc.util.SemiBlockingQueue;
 import reactor.core.publisher.Mono;
 
-import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.atomic.AtomicReference;
 
 @Slf4j
@@ -24,7 +23,7 @@ public class JdbcConnectionFactory implements ConnectionFactory, Closeable {
 
     JdbcConnectionFactory(ConnectionFactoryOptions options) {
         this.options = options;
-        this.adapter = new QueueDispatcher<>(new LinkedBlockingMultiQueue<>());
+        this.adapter = new QueueDispatcher<>();
         this.dispatcher = new Thread(this.adapter);
         this.dispatcher.setDaemon(true);
         sharedWorker = new AtomicReference<>();
@@ -36,7 +35,7 @@ public class JdbcConnectionFactory implements ConnectionFactory, Closeable {
             if (sharedWorker.get() == null) {
                 dispatcher.start();
                 sharedWorker.set(new JdbcWorker(
-                        new LinkedBlockingDeque<>(), adapter.subQueue(), options
+                        new SemiBlockingQueue<>(), adapter.subQueue(), options
                 ));
             }
             return Mono.<Void>empty();

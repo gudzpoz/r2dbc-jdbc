@@ -38,7 +38,6 @@ dependencies {
     implementation "io.r2dbc:r2dbc-spi:$r2dbcSpiVersion"
     implementation "io.projectreactor:reactor-core:$reactorVersion"
     implementation 'party.iroiro:reactor-locks:1.0.0'
-    implementation 'com.github.marianobarrios:linked-blocking-multi-queue:0.4.0'
     implementation 'commons-beanutils:commons-beanutils:1.9.4'
     implementation "org.slf4j:slf4j-api:$slf4jVersion"
     implementation 'com.google.code.findbugs:jsr305:3.0.2'

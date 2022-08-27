@@ -1,6 +1,5 @@
 package party.iroiro.r2jdbc.util;
 
-import lbmq.LinkedBlockingMultiQueue;
 import org.junit.jupiter.api.Test;
 import party.iroiro.r2jdbc.JdbcPacket;
 
@@ -10,10 +9,10 @@ public class QueueTest {
     @Test
     public void multiThreadedQueue() {
         System.out.println("Main " + Thread.currentThread().getName());
-        QueueDispatcher<JdbcPacket> adapter = new QueueDispatcher<>(new LinkedBlockingMultiQueue<>());
+        QueueDispatcher<JdbcPacket> adapter = new QueueDispatcher<>();
         Thread dispatcher = new Thread(adapter);
         dispatcher.start();
-        LinkedBlockingMultiQueue<Integer, QueueItem<JdbcPacket>>.SubQueue sub = adapter.subQueue();
+        SemiBlockingQueue<QueueItem<JdbcPacket>> sub = adapter.subQueue();
         BiConsumer<JdbcPacket, Throwable> consumer =
                 (p, e) -> System.out.println(Thread.currentThread().getName() + " " + e.getMessage());
         new Thread(() -> {
@@ -42,9 +41,7 @@ public class QueueTest {
 
     @Test
     public void interruptToQuit() {
-        QueueDispatcher<Integer> dispatcher = new QueueDispatcher<>(
-                new LinkedBlockingMultiQueue<>()
-        );
+        QueueDispatcher<Integer> dispatcher = new QueueDispatcher<>();
         Thread thread = new Thread(dispatcher);
         thread.start();
         try {

@@ -1,11 +1,10 @@
 package party.iroiro.r2jdbc.util;
 
-import lbmq.LinkedBlockingMultiQueue;
 import lombok.extern.slf4j.Slf4j;
 import reactor.core.scheduler.Scheduler;
 import reactor.core.scheduler.Schedulers;
 
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.locks.LockSupport;
 
 /**
  * Dispatches {@link QueueItem}s to their {@link QueueItem#consumer}
@@ -18,21 +17,17 @@ import java.util.concurrent.atomic.AtomicInteger;
  */
 @Slf4j
 public class QueueDispatcher<T> implements Runnable {
-    private final LinkedBlockingMultiQueue<Integer, QueueItem<T>> queue;
-    private final AtomicInteger i;
+    private final SemiBlockingQueue<QueueItem<T>> queue;
     private final Scheduler scheduler;
 
-    public QueueDispatcher(LinkedBlockingMultiQueue<Integer, QueueItem<T>> queue) {
-        this.queue = queue;
-        this.i = new AtomicInteger(1);
+    public QueueDispatcher() {
+        this.queue = new SemiBlockingQueue<>();
 
         scheduler = Schedulers.parallel();
     }
 
-    public LinkedBlockingMultiQueue<Integer, QueueItem<T>>.SubQueue subQueue() {
-        int id = i.getAndAdd(1);
-        queue.addSubQueue(id, 10);
-        return queue.getSubQueue(id);
+    public SemiBlockingQueue<QueueItem<T>> subQueue() {
+        return queue;
     }
 
     private void takeAndProcess() {
@@ -50,6 +45,7 @@ public class QueueDispatcher<T> implements Runnable {
 
     @Override
     public void run() {
+        queue.setConsumer(Thread.currentThread());
         log.debug("Listening");
         Thread.currentThread().setName("R2jdbcDispatcher");
         while (!Thread.interrupted()) {
@@ -60,5 +56,10 @@ public class QueueDispatcher<T> implements Runnable {
             takeAndProcess();
         }
         log.debug("Exiting");
+    }
+
+    public static void interrupt(Thread thread) {
+        thread.interrupt();
+        LockSupport.unpark(thread);
     }
 }
