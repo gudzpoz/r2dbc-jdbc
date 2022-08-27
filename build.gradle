@@ -37,7 +37,7 @@ dependencies {
     //noinspection GradlePackageUpdate -> TODO: Until Spring Data upgrades to R2DBC-SPI 1.0.0
     implementation "io.r2dbc:r2dbc-spi:$r2dbcSpiVersion"
     implementation "io.projectreactor:reactor-core:$reactorVersion"
-    implementation 'party.iroiro:reactor-locks:1.0.0'
+    implementation 'party.iroiro:reactor-locks:1.1.0'
     implementation 'commons-beanutils:commons-beanutils:1.9.4'
     implementation "org.slf4j:slf4j-api:$slf4jVersion"
     implementation 'com.google.code.findbugs:jsr305:3.0.2'
