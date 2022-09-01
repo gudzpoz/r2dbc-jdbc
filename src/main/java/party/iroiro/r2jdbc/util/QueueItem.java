@@ -11,9 +11,13 @@ import java.util.function.BiConsumer;
  * @param <T> the published object type of this conceptual {@link Mono}
  */
 @AllArgsConstructor
-public class QueueItem<T> {
+public class QueueItem<T> implements Runnable {
     public T item;
     public Exception e;
     public BiConsumer<T, Throwable> consumer;
-    boolean parallel;
+
+    @Override
+    public void run() {
+        consumer.accept(item, e);
+    }
 }

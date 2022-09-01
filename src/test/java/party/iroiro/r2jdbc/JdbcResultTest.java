@@ -69,6 +69,7 @@ public class JdbcResultTest {
                 connection, new Pair(new int[]{-1}, set), converter
         );
         result.getRowsUpdated().as(StepVerifier::create).expectNext(-1).verifyComplete();
+
         when(connection.offerNow(any(), any(), any())).then(invocation -> {
             //noinspection unchecked
             BiConsumer<JdbcPacket, Throwable> argument =

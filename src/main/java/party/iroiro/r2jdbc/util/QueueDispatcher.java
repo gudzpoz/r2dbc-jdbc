@@ -9,9 +9,7 @@ import java.util.concurrent.locks.LockSupport;
 /**
  * Dispatches {@link QueueItem}s to their {@link QueueItem#consumer}
  *
- * <p>The work may be off-loaded to a scheduler of {@link Schedulers#parallel}
- * depending on {@link QueueItem#parallel}. Or else it might slow down the dispatcher
- * thread.</p>
+ * <p>The work is off-loaded to a scheduler of {@link Schedulers#parallel}.</p>
  *
  * @param <T> see {@link QueueItem}
  */
@@ -32,12 +30,7 @@ public class QueueDispatcher<T> implements Runnable {
 
     private void takeAndProcess() {
         try {
-            QueueItem<T> item = queue.take();
-            if (item.parallel) {
-                scheduler.schedule(() -> item.consumer.accept(item.item, item.e));
-            } else {
-                item.consumer.accept(item.item, item.e);
-            }
+            scheduler.schedule(queue.take());
         } catch (InterruptedException ignored) {
             Thread.currentThread().interrupt();
         }

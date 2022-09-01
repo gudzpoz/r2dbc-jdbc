@@ -28,11 +28,11 @@ It is a toy project, and I promise there will be bugs.
 JDBC Connections                                Reactive
      /|\                                         Access
       |                                             |
-|------------|  Input Jobs (BlockingQueue<>)       \|/
+|------------|  Input Jobs (SemiBlockingQueue)     \|/
 |    The     |  <--------------------------- R2dbcConnections
 |            |
 |  worker(s) |  --------------------------->   Dispatcher
-|------------|  (LinkedBlockingMultiQueue<>)        |
+|------------|       (SemiBlockingQueue)            |
                            Output                   |
                                                    \|/
               Executing callbacks in Schedulers.parallel()
@@ -64,7 +64,7 @@ Using directly?
 <dependency>
   <groupId>party.iroiro</groupId>
   <artifactId>r2dbc-jdbc</artifactId>
-  <version>0.2.3</version>
+  <version>0.3.1</version>
 </dependency>
 ```
 
@@ -76,7 +76,7 @@ Using directly?
 Using directly?
 
 ```groovy
-implementation 'party.iroiro:r2dbc-jdbc:0.2.3'
+implementation 'party.iroiro:r2dbc-jdbc:0.3.1'
 ```
 
 </details>
@@ -94,7 +94,7 @@ implementation 'party.iroiro:r2dbc-jdbc:0.2.3'
 <dependency>
   <groupId>party.iroiro</groupId>
   <artifactId>r2dbc-jdbc</artifactId>
-  <version>0.2.3</version>
+  <version>0.3.1</version>
   <scope>runtime</scope>
 </dependency>
 ```
@@ -106,7 +106,7 @@ implementation 'party.iroiro:r2dbc-jdbc:0.2.3'
 
 ```groovy
 implementation 'org.springframework.boot:spring-boot-starter-data-r2dbc'
-runtimeOnly 'party.iroiro:r2dbc-jdbc:0.2.3'
+runtimeOnly 'party.iroiro:r2dbc-jdbc:0.3.1'
 ```
 
 </details>

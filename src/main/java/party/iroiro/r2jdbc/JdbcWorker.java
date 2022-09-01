@@ -127,17 +127,15 @@ class JdbcWorker implements Runnable {
     }
 
     private void offer(JdbcPacket packet, BiConsumer<JdbcPacket, Throwable> consumer) {
-        out.offer(new QueueItem<>(packet, null, consumer, true));
+        out.offer(new QueueItem<>(packet, null, consumer));
     }
 
     private void offer(BiConsumer<JdbcPacket, Throwable> consumer) {
-        out.offer(new QueueItem<>(null, null, consumer, false));
+        out.offer(new QueueItem<>(null, null, consumer));
     }
 
     private void offer(Exception e, BiConsumer<JdbcPacket, Throwable> consumer) {
-        out.offer(new QueueItem<>(
-                null, e, consumer, true
-        ));
+        out.offer(new QueueItem<>(null, e, consumer));
     }
 
     private void takeAndProcess() throws InterruptedException {

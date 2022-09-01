@@ -18,11 +18,11 @@ public class QueueTest {
         new Thread(() -> {
             System.out.println("From " + Thread.currentThread().getName());
             for (int i = 0; i < 20; i++) {
-                sub.offer(new QueueItem<>(null, new Exception(String.valueOf(i)), consumer, true));
+                sub.offer(new QueueItem<>(null, new Exception(String.valueOf(i)), consumer));
             }
         }).start();
         for (int i = 20; i < 40; i++) {
-            sub.offer(new QueueItem<>(null, new Exception(String.valueOf(i)), consumer, false));
+            sub.offer(new QueueItem<>(null, new Exception(String.valueOf(i)), consumer));
         }
         dispatcher.interrupt();
         while (dispatcher.isAlive()) {
